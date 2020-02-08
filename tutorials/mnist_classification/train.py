@@ -5,8 +5,8 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
-from .data import MNIST
-from .model import ConvNet
+from data import MNIST
+from model import ConvNet
 
 
 # Create the MNIST dataset.
