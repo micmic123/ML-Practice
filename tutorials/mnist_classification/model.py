@@ -49,6 +49,9 @@ class ConvNet(nn.Module):
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
 
+        # NOTE: It is perfectly safe to reuse the same Module many times when defining a computational graph.
+        # The state of the network is held in the graph and not in the layers,
+        # you can simply create a module object and reuse it over and over again for the recurrence.
         return F.log_softmax(x, dim=1)
 
 
