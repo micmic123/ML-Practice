@@ -1,5 +1,6 @@
 import requests, os, re, random
 import pandas as pd
+import numpy as np
 import torch
 from torchtext import data
 from torchtext.data import TabularDataset, BucketIterator
@@ -43,8 +44,8 @@ def raw2pre(train_df, test_df):
         return
 
     # leave only Korean characters
-    train_df['document'] = train_df['document'].str.replace('[^ㄱ-ㅎㅏ-ㅣ가-힣 ]', '')
-    test_df['document'] = test_df['document'].str.replace('[^ㄱ-ㅎㅏ-ㅣ가-힣 ]', '')
+    train_df['document'] = train_df['document'].str.replace('[^ㄱ-ㅎㅏ-ㅣ가-힣 ]', '').str.strip().replace(r'^\s*$', np.nan, regex=True)
+    test_df['document'] = test_df['document'].str.replace('[^ㄱ-ㅎㅏ-ㅣ가-힣 ]', '').str.strip().replace(r'^\s*$', np.nan, regex=True)
 
     # remove row with null
     train_df = train_df.dropna(how='any')
@@ -58,7 +59,7 @@ def raw2pre(train_df, test_df):
 def preprocessing(sentence):
     # sentence = re.sub('[^ㄱ-ㅎㅏ-ㅣ가-힣 ]', '', sentence)
     sentence = tokenizer.morphs(sentence)
-    sentence = [word for word in sentence if word not in stopwords]
+    # sentence = [word for word in sentence if word not in stopwords]
     return sentence
 
 
@@ -106,3 +107,7 @@ def get_data(batch_size=64, fix_length=None, min_req=10, max_size=10000):
 
     return train_loader, val_loader, test_loader, vocab_size
 
+
+if __name__ =='__main__':
+    train, test = get_raw_data()
+    raw2pre(train, test)
