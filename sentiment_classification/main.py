@@ -60,5 +60,6 @@ def train(model, optimizer, epochs=10):
 
 if __name__ == '__main__':
     model = SimpleGRU(vocab_size=vocab_size, embed_dim=64, class_num=2, hidden_dim=128, dropout=0.5, num_layers=2)
+    model.to(DEVICE)
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
     train(model, optimizer, 8)
