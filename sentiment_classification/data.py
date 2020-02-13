@@ -86,11 +86,12 @@ def get_data_helper(batch_size=100, fix_length=None, min_req=10, max_size=10000)
 
     # make Vocab
     TEXT.build_vocab(trainset, min_freq=min_req, max_size=max_size)
+    # TEXT.build_vocab(valset, min_freq=min_req, max_size=max_size)
     print(f'# vocab: {len(TEXT.vocab)}')
 
     # make Dataloader
     train_loader, val_loader, test_loader = BucketIterator.splits((trainset, valset, testset), batch_size=batch_size,
-                                                                  sort_key=lambda x: len(x.TEXT), shuffle=True, repeat=False)
+                                                                  sort_key=lambda x: len(x.text), shuffle=True, repeat=False)
     print(f'# train_batch: {len(train_loader)}\n# val_batch: {len(val_loader)}\n# test_batch:{len(test_loader)}')
 
     return train_loader, val_loader, test_loader, fields

@@ -14,23 +14,29 @@ train_loader, val_loader, test_loader, vocab_size = get_data()
 def train_epoch(model, optimizer, loader):
     model.train()
     for i, batch in enumerate(loader):
+        print(f'INFO train {i} starts')
+        print(batch)
         x, y = batch.text.to(DEVICE), batch.label.to(DEVICE)
         scores = model(x)
         loss = F.cross_entropy(scores, y)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        print(f'INFO train {i} end')
 
 
 def evaluate(model, loader):
     model.eval()
     loss_total, correct = 0, 0
-    for batch in loader:
+    for i, batch in enumerate(loader):
+        print(f'INFO eval {i} starts')
+        print(batch)
         x, y = batch.text.to(DEVICE), batch.label.to(DEVICE)
         scores = model(x)
         loss_total += F.cross_entropy(scores, y, reduction='sum').item()
         pred = scores.max(dim=1, keepdim=True)[1]
         correct += pred.eq(y.view_as(pred)).sum().item()
+        print(f'INFO eval {i} end')
 
     num = len(loader.dataset)
     loss_avg = loss_total / num
