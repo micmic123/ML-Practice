@@ -40,10 +40,9 @@ def evaluate(model, loader):
 
 
 def train(model, optimizer, epochs=10):
-
     best_val_loss = float('inf')
 
-    for epoch in epochs:
+    for epoch in range(epochs):
         start = time()
         train_epoch(model, optimizer, train_loader)
         end = time()
