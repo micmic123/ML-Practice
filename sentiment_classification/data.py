@@ -39,6 +39,9 @@ def get_raw_data():
 
 
 def raw2pre(train_df, test_df):
+    if 'train_pre.csv' in data_ls and 'test_pre.csv' in data_ls:
+      return
+      
     # remove row with null
     train_df = train_df.dropna(how='any')
     test_df = test_df.dropna(how='any')
@@ -83,11 +86,12 @@ def get_data_helper(batch_size=100, fix_length=None, min_req=10, max_size=10000)
 
     # make Vocab
     TEXT.build_vocab(trainset, min_freq=min_req, max_size=max_size)
+    # TEXT.build_vocab(valset, min_freq=min_req, max_size=max_size)
     print(f'# vocab: {len(TEXT.vocab)}')
 
     # make Dataloader
     train_loader, val_loader, test_loader = BucketIterator.splits((trainset, valset, testset), batch_size=batch_size,
-                                                                  shuffle=True, repeat=False)
+                                                                  sort_key=lambda x: len(x.text), shuffle=True, repeat=False)
     print(f'# train_batch: {len(train_loader)}\n# val_batch: {len(val_loader)}\n# test_batch:{len(test_loader)}')
 
     return train_loader, val_loader, test_loader, fields
