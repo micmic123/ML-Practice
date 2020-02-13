@@ -7,6 +7,8 @@ from konlpy.tag import Mecab
 
 
 path_base = os.path.expanduser('~/dataset/naver_movie_review')
+if not os.path.isdir(path_base):
+    os.makedirs(path_base)
 data_ls = os.listdir(path_base)
 stopwords = {'의','가','이','은','들','는','좀','잘','걍','과','도','를','으로','자','에','와','한','하다'}
 tokenizer = Mecab()
