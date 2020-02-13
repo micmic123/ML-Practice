@@ -88,7 +88,7 @@ def get_data_helper(batch_size=100, fix_length=None, min_req=10, max_size=10000)
     # make Dataloader
     train_loader, val_loader, test_loader = BucketIterator.splits((trainset, valset, testset), batch_size=batch_size,
                                                                   shuffle=True, repeat=False)
-    print(f'# train_batch: {len(train_loader)}\n# train_batch: {len(val_loader)}\n# test_batch:{len(test_loader)}')
+    print(f'# train_batch: {len(train_loader)}\n# val_batch: {len(val_loader)}\n# test_batch:{len(test_loader)}')
 
     return train_loader, val_loader, test_loader, fields
 

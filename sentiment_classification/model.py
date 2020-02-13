@@ -6,7 +6,7 @@ from data import DEVICE
 
 class SimpleGRU(nn.Module):
     def __init__(self, hidden_dim, vocab_size, embed_dim, class_num, dropout=0.5, num_layers=2):
-        super(SimpleGRU, nn.Module).__init__()
+        super(SimpleGRU, self).__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
 
