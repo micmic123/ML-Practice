@@ -13,6 +13,7 @@ class SimpleGRU(nn.Module):
         self.embed = nn.Embedding(vocab_size, embed_dim)
         self.dropout = nn.Dropout(dropout)
         self.gru = nn.GRU(embed_dim, hidden_dim, num_layers=num_layers, batch_first=True)
+        # batch_first is applied only for input and output of gru except h_0, h_n
         self.out = nn.Linear(hidden_dim, class_num)
 
     def forward(self, x):
@@ -24,7 +25,7 @@ class SimpleGRU(nn.Module):
         h_0 = self._init_hidden(x.size()[0])
         _, h_t = self.gru(x, h_0)
         # [hidden_state_all] B x T x (num_directions * hidden_dim)
-        # [hidden_state_last] B x (num_layers * num_directions) x hidden_dim
+        # [hidden_state_last] (num_layers * num_directions) x B x hidden_dim
 
         h_t = x[:, 0, :]  # B x hidden_dim
         out = self.out(h_t)
@@ -32,4 +33,4 @@ class SimpleGRU(nn.Module):
         return out
 
     def _init_hidden(self, batch_size):
-        return torch.zeros(batch_size, self.num_layers, self.hidden_dim, device=DEVICE)
+        return torch.zeros(self.num_layers, batch_size, self.hidden_dim, device=DEVICE)
