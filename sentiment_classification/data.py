@@ -66,7 +66,7 @@ def get_data_helper(batch_size=100, fix_length=None, min_req=10, max_size=10000)
     # fix_length of TEXT is not necessary: refer to BucketIterator
     TEXT = data.Field(sequential=True, use_vocab=True, tokenize=preprocessing, lower=True, batch_first=True,
                       fix_length=fix_length)
-    LABEL = data.Field(sequential=False, use_vocab=False, is_target=True)
+    LABEL = data.Field(sequential=False, use_vocab=False, is_target=True, batch_first=True)
     fields = {
         'ID': ID,
         'TEXT': TEXT,
