@@ -44,8 +44,8 @@ def raw2pre(train_df, test_df):
     test_df = test_df.dropna(how='any')
 
     # leave only Korean characters
-    train_df = train_df['document'].str.replace('[^ㄱ-ㅎㅏ-ㅣ가-힣 ]', '')
-    test_df = test_df['document'].str.replace('[^ㄱ-ㅎㅏ-ㅣ가-힣 ]', '')
+    train_df['document'] = train_df['document'].str.replace('[^ㄱ-ㅎㅏ-ㅣ가-힣 ]', '')
+    test_df['document'] = test_df['document'].str.replace('[^ㄱ-ㅎㅏ-ㅣ가-힣 ]', '')
 
     # save as csv file
     train_df.to_csv(os.path.join(path_base, 'train_pre.csv'), index=False)
