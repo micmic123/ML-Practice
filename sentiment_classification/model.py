@@ -27,7 +27,7 @@ class SimpleGRU(nn.Module):
         # [hidden_state_all] B x T x (num_directions * hidden_dim)
         # [hidden_state_last] (num_layers * num_directions) x B x hidden_dim
 
-        h_t = x[0, :, :]  # B x hidden_dim
+        h_t = h_t[0, :, :]  # B x hidden_dim
         out = self.out(h_t)
 
         return out

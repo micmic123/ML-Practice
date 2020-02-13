@@ -46,7 +46,7 @@ def train(model, optimizer, epochs=10):
         start = time()
         train_epoch(model, optimizer, train_loader)
         end = time()
-        val_loss, val_acc = evaluate(model, optimizer, val_loader)
+        val_loss, val_acc = evaluate(model, val_loader)
 
         print(f'[Epoch {epoch}] val_loss: {val_loss:.2f} | val_acc: {val_acc:.2f}% | time: {end-start:.2f}s')
 

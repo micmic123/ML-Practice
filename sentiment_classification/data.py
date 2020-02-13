@@ -39,13 +39,16 @@ def get_raw_data():
 
 
 def raw2pre(train_df, test_df):
-    # remove row with null
-    train_df = train_df.dropna(how='any')
-    test_df = test_df.dropna(how='any')
+    if 'train_pre.csv' in data_ls and 'test_pre.csv' in data_ls:
+        return
 
     # leave only Korean characters
     train_df['document'] = train_df['document'].str.replace('[^ㄱ-ㅎㅏ-ㅣ가-힣 ]', '')
     test_df['document'] = test_df['document'].str.replace('[^ㄱ-ㅎㅏ-ㅣ가-힣 ]', '')
+
+    # remove row with null
+    train_df = train_df.dropna(how='any')
+    test_df = test_df.dropna(how='any')
 
     # save as csv file
     train_df.to_csv(os.path.join(path_base, 'train_pre.csv'), index=False)
@@ -87,7 +90,7 @@ def get_data_helper(batch_size=100, fix_length=None, min_req=10, max_size=10000)
 
     # make Dataloader
     train_loader, val_loader, test_loader = BucketIterator.splits((trainset, valset, testset), batch_size=batch_size,
-                                                                  shuffle=True, repeat=False)
+                                                                  sort_key=lambda x: len(x.TEXT), shuffle=True, repeat=False)
     print(f'# train_batch: {len(train_loader)}\n# val_batch: {len(val_loader)}\n# test_batch:{len(test_loader)}')
 
     return train_loader, val_loader, test_loader, fields
