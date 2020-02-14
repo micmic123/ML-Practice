@@ -1,6 +1,7 @@
 import requests, os, re, random
 import pandas as pd
 import numpy as np
+import dill
 import torch
 from torchtext import data
 from torchtext.data import TabularDataset, BucketIterator
@@ -108,6 +109,15 @@ def get_data(batch_size=64, fix_length=None, min_req=10, max_size=10000):
     return train_loader, val_loader, test_loader, vocab_size
 
 
-if __name__ =='__main__':
+def save_fields(fields):
+    if not os.path.isdir('snapshot'):
+        os.mkdir('snapshot')
+    with open('snapshot/fields.Field', 'wb') as f:
+        dill.dump(fields, f)
+
+
+if __name__ == '__main__':
     train, test = get_raw_data()
     raw2pre(train, test)
+    _, _, _, fields = get_data_helper()
+    save_fields(fields)
