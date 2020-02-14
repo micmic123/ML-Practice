@@ -1,4 +1,4 @@
-import os
+import os, dill
 from time import time
 from tqdm import tqdm
 import torch
@@ -67,9 +67,24 @@ def train(model, optimizer, epochs=10):
         os.mkdir('snapshot')
     torch.save(model.state_dict(), f'./snapshot/model_{test_acc:.2f}.pt')
 
+    return f'model_{test_acc:.2f}'
+
+
+def save_hp(hp, name):
+    with open(f'snapshot/{name}.hp', 'wb') as f:
+        dill.dump(hp, f)
+
 
 if __name__ == '__main__':
-    model = SimpleGRU(vocab_size=vocab_size, embed_dim=64, class_num=2, hidden_dim=128, dropout=0.5, num_layers=2)
+    hp = {'vocab_size': vocab_size,
+          'embed_dim': 64,
+          'class_num': 2,
+          'hidden_dim': 128,
+          'dropout': 0.5,
+          'num_layers': 2
+    }
+    model = SimpleGRU(**hp)
     model.to(DEVICE)
     optimizer = optim.Adam(model.parameters(), lr=0.0001)
-    train(model, optimizer, 8)
+    name = train(model, optimizer, 8)
+    save_hp(hp, name)
