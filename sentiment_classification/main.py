@@ -47,7 +47,7 @@ def evaluate(model, loader):
 
 
 def train(model, optimizer, epochs=10, verbose=False):
-    val_loss, val_acc = None, None
+    val_loss_prev = float('inf')
 
     for epoch in range(epochs):
         start = time()
@@ -56,8 +56,13 @@ def train(model, optimizer, epochs=10, verbose=False):
         val_loss, val_acc = evaluate(model, val_loader)
 
         if verbose:
-            print(f'[Epoch {epoch}] val_loss: {val_loss:.2f} | val_acc: {val_acc:.2f}% | time: {end-start:.2f}s')
+            print(f'[Epoch {epoch}] val_loss: {val_loss:.4f} | val_acc: {val_acc:.2f}% | time: {end-start:.2f}s')
 
+        # early-stopping
+        if val_loss < val_loss_prev:
+            val_loss_prev = val_loss
+        else:
+            break
     return val_loss, val_acc
 
 
@@ -78,14 +83,14 @@ def tunning_hp():
     candidate = {
         'model': {
             'vocab_size': vocab_size,
-            'embed_dim': [32, 64, 128],
-            'class_num': [2],
-            'hidden_dim': [64, 128, 196],
+            'embed_dim': [64, 128],
+            'class_num': 2,
+            'hidden_dim': [64, 128],
             'dropout': [0.5],
             'num_layers': [2]
         },
         'optim': {
-            'lr': [1e-5, 5e-5, 1e-4]
+            'lr': [5e-4, 8e-4, 1e-3]
         }
     }
 
@@ -104,7 +109,7 @@ def tunning_hp():
                         'dropout': 0.5,
                         'num_layers': 2
                     },
-                    optim: {
+                    'optim': {
                         'lr': lr
                     }
                 }
@@ -120,11 +125,12 @@ def tunning_hp():
                     best_loss = val_loss
 
     # additional train for best_model with best_hp
+    print(f'[INFO] the best hyper-parameter: \n{best_hp}')
+    print(f'additional training...')
     optimizer = optim.Adam(best_model.parameters(), lr=best_hp['optim']['lr'])
     train(best_model, optimizer, 5, verbose=True)
     test_loss, test_acc = evaluate(best_model, test_loader)
-    print(f'[INFO] the best hyper-parameter: \n{best_hp}')
-    print(f'[INFO] test_loss: {test_loss:.2f} | test_acc: {test_acc:.2f}%')
+    print(f'[INFO] test_loss: {test_loss:.4f} | test_acc: {test_acc:.2f}%')
     name = f'{test_acc:.2f}'
     save_hp(best_hp, name)
     save_model(best_model, name)

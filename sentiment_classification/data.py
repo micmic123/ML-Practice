@@ -101,8 +101,10 @@ def get_data_helper(batch_size=100, fix_length=None, min_req=10, max_size=10000)
 
 # return Dataloader and vocab_size
 def get_data(batch_size=64, fix_length=None, min_req=10, max_size=10000):
+    print('getting data...')
     train, test = get_raw_data()
     raw2pre(train, test)
+    print('loading data...')
     train_loader, val_loader, test_loader, fields = get_data_helper(batch_size, fix_length, min_req, max_size)
     vocab_size = len(fields['TEXT'].vocab)
     save_fields(fields)
