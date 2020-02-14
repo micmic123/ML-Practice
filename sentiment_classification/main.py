@@ -46,8 +46,8 @@ def evaluate(model, loader):
     return loss_avg, acc
 
 
-def train(model, optimizer, epochs=10):
-    best_val_loss = float('inf')
+def train(model, optimizer, epochs=10, verbose=False):
+    val_loss, val_acc = None, None
 
     for epoch in range(epochs):
         start = time()
@@ -55,36 +55,85 @@ def train(model, optimizer, epochs=10):
         end = time()
         val_loss, val_acc = evaluate(model, val_loader)
 
-        print(f'[Epoch {epoch}] val_loss: {val_loss:.2f} | val_acc: {val_acc:.2f}% | time: {end-start:.2f}s')
+        if verbose:
+            print(f'[Epoch {epoch}] val_loss: {val_loss:.2f} | val_acc: {val_acc:.2f}% | time: {end-start:.2f}s')
 
-        # save best_val_loss model
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-
-    test_loss, test_acc = evaluate(model, train_loader)
-    print(f'[Final] test_loss: {test_loss:.2f} | test_acc: {test_acc:.2f}%')
-    if not os.path.isdir('snapshot'):
-        os.mkdir('snapshot')
-    torch.save(model.state_dict(), f'./snapshot/model_{test_acc:.2f}.pt')
-
-    return f'model_{test_acc:.2f}'
+    return val_loss, val_acc
 
 
 def save_hp(hp, name):
+    if not os.path.isdir('snapshot'):
+        os.mkdir('snapshot')
     with open(f'snapshot/{name}.hp', 'wb') as f:
         dill.dump(hp, f)
 
 
-if __name__ == '__main__':
-    hp = {'vocab_size': vocab_size,
-          'embed_dim': 64,
-          'class_num': 2,
-          'hidden_dim': 128,
-          'dropout': 0.5,
-          'num_layers': 2
+def save_model(model, name):
+    if not os.path.isdir('snapshot'):
+        os.mkdir('snapshot')
+    torch.save(model.state_dict(), f'./snapshot/{name}.pt')
+
+
+def tunning_hp():
+    candidate = {
+        'model': {
+            'vocab_size': vocab_size,
+            'embed_dim': [32, 64, 128],
+            'class_num': [2],
+            'hidden_dim': [64, 128, 196],
+            'dropout': [0.5],
+            'num_layers': [2]
+        },
+        'optim': {
+            'lr': [1e-5, 5e-5, 1e-4]
+        }
     }
-    model = SimpleGRU(**hp)
-    model.to(DEVICE)
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
-    name = train(model, optimizer, 8)
-    save_hp(hp, name)
+
+    best_loss = float('inf')
+    best_model = None
+    best_hp = {
+        'model': {
+            'vocab_size': vocab_size,
+            'embed_dim': None,
+            'class_num': 2,
+            'hidden_dim': None,
+            'dropout': 0.5,
+            'num_layers': 2
+        },
+        'optim': {
+            'lr': None
+        }
+    }
+    for embed_dim in candidate['model']['embed_dim']:
+        for hidden_dim in candidate['model']['hidden_dim']:
+            for lr in candidate['optim']['lr']:
+                hp = {
+                    'vocab_size': vocab_size,
+                    'embed_dim': embed_dim,
+                    'class_num': 2,
+                    'hidden_dim': hidden_dim,
+                    'dropout': 0.5,
+                    'num_layers': 2
+                }
+                model = SimpleGRU(**hp)
+                model.to(DEVICE)
+                optimizer = optim.Adam(model.parameters(), lr=lr)
+                val_loss, val_acc = train(model, optimizer, 5, verbose=True)
+
+                if val_loss < best_loss:
+                    best_model = model
+                    best_hp['model']['embed_dim'] = embed_dim
+                    best_hp['model']['hidden_dim'] = hidden_dim
+                    best_hp['optim']['lr'] = lr
+                    best_loss = val_loss
+
+    test_loss, test_acc = evaluate(best_model, train_loader)
+    print(f'[INFO] the best hyper-parameter: \n{best_hp}')
+    print(f'[INFO] test_loss: {test_loss:.2f} | test_acc: {test_acc:.2f}%')
+    name = f'{test_acc:.2f}'
+    save_hp(best_hp, name)
+    save_model(best_model, name)
+
+
+if __name__ == '__main__':
+    tunning_hp()
