@@ -105,6 +105,7 @@ def get_data(batch_size=64, fix_length=None, min_req=10, max_size=10000):
     raw2pre(train, test)
     train_loader, val_loader, test_loader, fields = get_data_helper(batch_size, fix_length, min_req, max_size)
     vocab_size = len(fields['TEXT'].vocab)
+    save_fields(fields)
 
     return train_loader, val_loader, test_loader, vocab_size
 
@@ -119,5 +120,5 @@ def save_fields(fields):
 if __name__ == '__main__':
     train, test = get_raw_data()
     raw2pre(train, test)
-    _, _, _, fields = get_data_helper()
-    save_fields(fields)
+    # _, _, _, fields = get_data_helper()
+    # save_fields(fields)
