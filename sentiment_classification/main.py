@@ -91,43 +91,38 @@ def tunning_hp():
 
     best_loss = float('inf')
     best_model = None
-    best_hp = {
-        'model': {
-            'vocab_size': vocab_size,
-            'embed_dim': None,
-            'class_num': 2,
-            'hidden_dim': None,
-            'dropout': 0.5,
-            'num_layers': 2
-        },
-        'optim': {
-            'lr': None
-        }
-    }
+    best_hp = None
     for embed_dim in candidate['model']['embed_dim']:
         for hidden_dim in candidate['model']['hidden_dim']:
             for lr in candidate['optim']['lr']:
                 hp = {
-                    'vocab_size': vocab_size,
-                    'embed_dim': embed_dim,
-                    'class_num': 2,
-                    'hidden_dim': hidden_dim,
-                    'dropout': 0.5,
-                    'num_layers': 2
+                    'model': {
+                        'vocab_size': vocab_size,
+                        'embed_dim': embed_dim,
+                        'class_num': 2,
+                        'hidden_dim': hidden_dim,
+                        'dropout': 0.5,
+                        'num_layers': 2
+                    },
+                    optim: {
+                        'lr': lr
+                    }
                 }
-                model = SimpleGRU(**hp)
+                print(f'[INFO] current hyper-parameter: \n{hp}')
+                model = SimpleGRU(**hp['model'])
                 model.to(DEVICE)
-                optimizer = optim.Adam(model.parameters(), lr=lr)
+                optimizer = optim.Adam(model.parameters(), lr=hp['optim']['lr'])
                 val_loss, val_acc = train(model, optimizer, 5, verbose=True)
 
                 if val_loss < best_loss:
                     best_model = model
-                    best_hp['model']['embed_dim'] = embed_dim
-                    best_hp['model']['hidden_dim'] = hidden_dim
-                    best_hp['optim']['lr'] = lr
+                    best_hp = hp
                     best_loss = val_loss
 
-    test_loss, test_acc = evaluate(best_model, train_loader)
+    # additional train for best_model with best_hp
+    optimizer = optim.Adam(best_model.parameters(), lr=best_hp['optim']['lr'])
+    train(best_model, optimizer, 5, verbose=True)
+    test_loss, test_acc = evaluate(best_model, test_loader)
     print(f'[INFO] the best hyper-parameter: \n{best_hp}')
     print(f'[INFO] test_loss: {test_loss:.2f} | test_acc: {test_acc:.2f}%')
     name = f'{test_acc:.2f}'
