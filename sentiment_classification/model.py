@@ -27,9 +27,23 @@ class SimpleGRU(nn.Module):
         # [hidden_state_all] B x T x (num_directions * hidden_dim)
         # [hidden_state_last] (num_layers * num_directions) x B x hidden_dim
         h_t = h_t[0, :, :]  # B x hidden_dim
+        h_t = self.dropout(h_t)
         out = self.out(h_t)
 
         return out
 
     def _init_hidden(self, batch_size):
         return torch.zeros(self.num_layers, batch_size, self.hidden_dim, device=DEVICE)
+
+
+# class SimpleLSTM(nn.Module):
+#     def __init__(self, hidden_dim, vocab_size, embed_dim, class_num, dropout=0.5, num_layers=2):
+#         super(SimpleLSTM, self).__init__()
+#         self.hidden_dim = hidden_dim
+#         self.num_layers = num_layers
+#
+#         self.embed = nn.Embedding(vocab_size, embed_dim)
+#         self.dropout = nn.Dropout(dropout)
+
+
+

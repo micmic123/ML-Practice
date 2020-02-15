@@ -58,11 +58,11 @@ def train(model, optimizer, epochs=10, verbose=False):
         if verbose:
             print(f'[Epoch {epoch}] val_loss: {val_loss:.4f} | val_acc: {val_acc:.2f}% | time: {end-start:.2f}s')
 
-        # early-stopping
-        if val_loss < val_loss_prev:
-            val_loss_prev = val_loss
-        else:
-            break
+        # # early-stopping
+        # if val_loss < val_loss_prev:
+        #     val_loss_prev = val_loss
+        # else:
+        #     break
     return val_loss, val_acc
 
 
@@ -83,14 +83,14 @@ def tunning_hp():
     candidate = {
         'model': {
             'vocab_size': vocab_size,
-            'embed_dim': [64, 128],
+            'embed_dim': [128],
             'class_num': 2,
-            'hidden_dim': [64, 128],
-            'dropout': [0.5],
+            'hidden_dim': [128],
+            'dropout': [0.2, 0.5, 0.7],
             'num_layers': [2]
         },
         'optim': {
-            'lr': [5e-4, 8e-4, 1e-3]
+            'lr': [8e-4]
         }
     }
 
@@ -99,36 +99,37 @@ def tunning_hp():
     best_hp = None
     for embed_dim in candidate['model']['embed_dim']:
         for hidden_dim in candidate['model']['hidden_dim']:
-            for lr in candidate['optim']['lr']:
-                hp = {
-                    'model': {
-                        'vocab_size': vocab_size,
-                        'embed_dim': embed_dim,
-                        'class_num': 2,
-                        'hidden_dim': hidden_dim,
-                        'dropout': 0.5,
-                        'num_layers': 2
-                    },
-                    'optim': {
-                        'lr': lr
+            for dropout in candidate['model']['dropout']:
+                for lr in candidate['optim']['lr']:
+                    hp = {
+                        'model': {
+                            'vocab_size': vocab_size,
+                            'embed_dim': embed_dim,
+                            'class_num': 2,
+                            'hidden_dim': hidden_dim,
+                            'dropout': dropout,
+                            'num_layers': 2
+                        },
+                        'optim': {
+                            'lr': lr
+                        }
                     }
-                }
-                print(f'[INFO] current hyper-parameter: \n{hp}')
-                model = SimpleGRU(**hp['model'])
-                model.to(DEVICE)
-                optimizer = optim.Adam(model.parameters(), lr=hp['optim']['lr'])
-                val_loss, val_acc = train(model, optimizer, 5, verbose=True)
+                    print(f'[INFO] current hyper-parameter: \n{hp}')
+                    model = SimpleGRU(**hp['model'])
+                    model.to(DEVICE)
+                    optimizer = optim.Adam(model.parameters(), lr=hp['optim']['lr'])
+                    val_loss, val_acc = train(model, optimizer, 5, verbose=True)
 
-                if val_loss < best_loss:
-                    best_model = model
-                    best_hp = hp
-                    best_loss = val_loss
+                    if val_loss < best_loss:
+                        best_model = model
+                        best_hp = hp
+                        best_loss = val_loss
 
     # additional train for best_model with best_hp
     print(f'[INFO] the best hyper-parameter: \n{best_hp}')
     print(f'additional training...')
     optimizer = optim.Adam(best_model.parameters(), lr=best_hp['optim']['lr'])
-    train(best_model, optimizer, 5, verbose=True)
+    train(best_model, optimizer, 3, verbose=True)
     test_loss, test_acc = evaluate(best_model, test_loader)
     print(f'[INFO] test_loss: {test_loss:.4f} | test_acc: {test_acc:.2f}%')
     name = f'{test_acc:.2f}'
