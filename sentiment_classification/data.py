@@ -18,7 +18,7 @@ SEED = 5
 random.seed(SEED)
 torch.manual_seed(SEED)
 USE_CUDA = torch.cuda.is_available()
-DEVICE = torch.device("cuda" if USE_CUDA else "cpu")
+DEVICE = torch.device('cuda' if USE_CUDA else 'cpu')
 print(f'[INFO] {DEVICE} activated')
 
 
