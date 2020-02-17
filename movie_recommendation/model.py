@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from data import DEVICE
 
 
 class BasicLSTM(nn.Module):
@@ -57,7 +58,7 @@ class BasicLSTM(nn.Module):
         - scores of B x item_size
         """
         vec = self.get_vec(x, user)  # B x (hidden_dim + embed_user_dim)
-        items = self.embed_item(torch.LongTensor(range(self.item_size))).t()  # (hidden_dim + embed_user_dim) x item_size
+        items = self.embed_item(torch.LongTensor(range(self.item_size)).to(DEVICE)).t()  # (hidden_dim + embed_user_dim) x item_size
         scores = torch.matmul(vec, items)  # B x item_size
 
         return scores

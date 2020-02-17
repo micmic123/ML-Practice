@@ -29,7 +29,6 @@ def compute_ap(predictions, targets, k):
 def evaluate(preds, gts, k=10, map_k=50):
     preds = (-preds).argsort()
     preds = preds.tolist()
-    gts = gts.tolist()
     precs = [compute_precision(p, t, k=k) for (p, t) in zip(preds, gts)]
     recalls = [compute_recall(p, t, k=k) for (p, t) in zip(preds, gts)]
     aps = [compute_ap(p, t, k=map_k) for (p, t) in zip(preds, gts)]

@@ -2,56 +2,70 @@ import time, tqdm
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-from data import DEVICE, get_loader
+from data import DEVICE, get_data
 from model import BasicLSTM
 from util import evaluate
 
 
-train_loader, test_loader, item_size, user_size = get_loader(batch_size=1024)
+batch_size = 1024
+train_loader, testset, item_size, user_size = get_data(batch_size=batch_size)
+# torch.autograd.set_detect_anomaly(True)
 
 
 def train_epoch(model, optimizer, epoch):
+    model.train()
     loss_total = 0.
+    epsilon = 1e-10
     for batch_idx, (x, y_pos, y_neg, u) in tqdm.tqdm(enumerate(train_loader), total=len(train_loader),
                                                      desc=f'epoch {epoch:2d}'):
         x, y_pos, y_neg, u = x.to(DEVICE), y_pos.to(DEVICE), y_neg.to(DEVICE), u.to(DEVICE)
-        scores = model(x)  # B x 63
-        scores[:, :3] = F.logsigmoid(scores[:, :3])  # loss_pos
-        scores[:, 3:] = torch.log(1 - F.sigmoid(scores[:, 3:]))  # loss_neg
+        scores = model(x, u, y_pos, y_neg)  # B x 63
 
-        loss = torch.sum(scores)  # sum of each loss_pos and loss_neg
+        loss_pos = -torch.sum(F.logsigmoid(scores[:, :3]), dim=1)
+        loss_neg = -torch.sum(torch.log(1 - torch.sigmoid(scores[:, 3:]) + epsilon), dim=1)
+        loss = torch.mean(loss_pos + loss_neg)  # mean of each loss for one data
+
+        # Below is error since some data of scores is replaced in-place, so autograd cannot trace it.
+        # scores[:, :3] = F.logsigmoid(scores[:, :3])  # loss_pos
+        # scores[:, 3:] = torch.log(1 - torch.sigmoid(scores[:, 3:]))  # loss_neg
+        # loss = torch.sum(scores)
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
         loss_total += loss.item()
 
-    return loss_total
+    return loss_total, batch_idx
 
 
 def train(model, optimizer, epochs=5):
-    model.train()
     k = 10
-    for epoch in epochs:
+    for epoch in range(epochs):
         start = time.time()
-        loss = train_epoch(model, optimizer, epoch)
+        loss, batch_num = train_epoch(model, optimizer, epoch)
         end = time.time()
         time_epoch = end - start
 
         start = time.time()
-        prec, recall, mAP = eval(model, test_loader)
+        prec, recall, mAP = eval(model)
         end = time.time()
         time_eval = end - start
+
+        loss /= (batch_num+1)
         print(f'Epoch: {epoch + 1}\tLoss: {loss:.4f} [{time_epoch:.1f} s]\t'
               f'Prec@{k}: {prec:.4f}\tRecall@{k}: {recall:.4f}\tMAP: {mAP:.4f} [{time_eval:.1f} s]')
 
 
-def eval(model, loader):
+def eval(model):
     model.eval()
-    for x, y, u in loader:  # 한 번에 다 갖고 오기 때문에 사실 1회만 반복
-        x, y, u = x.to(DEVICE), y.to(DEVICE), u.to(DEVICE)
-        scores = model.predict(x, u)
-        prec, recall, mAP = evaluate(scores, y)
+    x, y, u = testset
+    x, u = x.to(DEVICE), u.to(DEVICE)
+    # print(f'm {model.device}')
+    # print(f'x {x.device}')
+    # print(f'u {u.device}')
+    scores = model.predict(x, u)
+    prec, recall, mAP = evaluate(scores, y)
 
     return prec, recall, mAP
 
