@@ -26,7 +26,7 @@ def train_epoch(model, optimizer, epoch):
         #         print(1-torch.sigmoid(scores[:, 3:]))
         loss_pos = -torch.sum(F.logsigmoid(scores[:, :3]), dim=1)
         loss_neg = -torch.sum(torch.log(1 - torch.sigmoid(scores[:, 3:]) + epsilon), dim=1)
-        loss = torch.mean(loss_pos + loss_neg)  # mean of each loss for one data
+        loss = torch.mean(loss_pos + loss_neg)  # mean of each loss(=loss_pos + loss_neg) for one data
 
         # Below is error since some data of scores is replaced in-place, so autograd cannot trace it.
         # scores[:, :3] = F.logsigmoid(scores[:, :3])  # loss_pos
@@ -43,35 +43,36 @@ def train_epoch(model, optimizer, epoch):
 
 
 def train(model, optimizer, epochs=5):
-    k = 10
+    k = [10, 50]
     for epoch in range(epochs):
         start = time.time()
         loss = train_epoch(model, optimizer, epoch)
         end = time.time()
         time_epoch = end - start
 
-        start = time.time()
-        prec, recall, mAP = eval(model)
-        end = time.time()
-        time_eval = end - start
+        for k_ in k:
+            start = time.time()
+            prec, recall, mAP = eval(model, k_)
+            end = time.time()
+            time_eval = end - start
+            print(f'Epoch: {epoch + 1}\tLoss: {loss:.4f} [{time_epoch:.1f} s]\t'
+                  f'Prec@{k_}: {prec:.4f}\tRecall@{k_}: {recall:.4f}\tMAP: {mAP:.4f} [{time_eval:.1f} s]')
 
-        print(f'Epoch: {epoch + 1}\tLoss: {loss:.4f} [{time_epoch:.1f} s]\t'
-              f'Prec@{k}: {prec:.4f}\tRecall@{k}: {recall:.4f}\tMAP: {mAP:.4f} [{time_eval:.1f} s]')
 
-
-def eval(model):
+def eval(model, k):
     model.eval()
-    x, y, u = testset
-    x, u = x.to(DEVICE), u.to(DEVICE)
-    scores = model.predict(x, u)
-    prec, recall, mAP = evaluate(scores, y)
+    with torch.no_grad():
+        x, y, u = testset
+        x, u = x.to(DEVICE), u.to(DEVICE)
+        scores = model.predict(x, u)
+    prec, recall, mAP = evaluate(scores, y, k)
 
     return prec, recall, mAP
 
 
 if __name__ == '__main__':
     # hp: item_size, user_size, embed_dim, hidden_dim, num_lstm, embed_user_dim
-    model = BasicLSTM(item_size, user_size, 50, 50, 1, 50)
+    model = BasicLSTM(item_size, user_size, 192, 128, 3, 64)
     model.to(DEVICE)
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    train(model, optimizer, 15)
+    train(model, optimizer, 20)
