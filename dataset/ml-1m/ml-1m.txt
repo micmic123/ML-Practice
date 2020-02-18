@@ -1,0 +1,10 @@
+train_x=trn_feed_sequences, 
+train_y_pos=trn_positive_targets, 
+train_y_neg=trn_negative_targets,
+train_user=trn_users,
+test_x=test_feed_sequences,
+test_user=test_users,
+test_y=test_targets,
+movie=meta_dict
+
+* To load movie, data['movie'].all()
