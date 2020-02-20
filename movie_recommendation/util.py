@@ -1,4 +1,4 @@
-# [정밀도] scores의 top-k를 고른 뒤, 그들 중 targets에 있는 것의 비율
+# (정밀도) scores의 top-k를 고른 뒤, 그들 중 targets에 있는 것의 비율
 # 의미: 이 모델이 예측을 하면 그 예측이 얼마나 정확한지
 def compute_precision(predictions, targets, k):
     pred = predictions[:k]
@@ -6,7 +6,7 @@ def compute_precision(predictions, targets, k):
     return float(num_hit) / len(pred)
 
 
-# [재현율] scores의 top-k를 고른 뒤, 전체 target들 중 맞춘 것 비율
+# (재현율) scores의 top-k를 고른 뒤, 전체 target들 중 맞춘 것 비율
 # 의미: 이 모델이 정답을 얼마나 빠뜨리지 않는지
 def compute_recall(predictions, targets, k):
     pred = predictions[:k]
