@@ -1,0 +1,28 @@
+*refs
+https://github.com/yihong-chen/neural-collaborative-filtering/blob/master/src/data.py
+https://github.com/yihong-chen/neural-collaborative-filtering/blob/master/src/train.py
+
+[전처리로 생성하는 파일]
+- train: (user, item)의 형태로 positive instance만 담고 있는 리스트
+- movie: item set
+
+[Dataset]
+- __init__(): user, item, labels 보관용
+
+[SampleGenerator]
+- epoch마다 negative sampling해서 self.user, self.item, self.labels 생성
+
+- dataset 생성, dataloader 생성해서 반환함.
+
+- 생성자에서 파일 한 번만 로드해서 멤버 변수로 저장해두니 로딩 시간은 걱정 안 해도 됨.
+
+[hyperparameter tuning]
+- train mode일 시 지정된 모델에 대해 config를 갖고 tuning함.
+
+- config의 각 hp조합에 대하여 train_tuning으로 학습하고 매 epoch마다 validset으로 hr, loss 계산.
+
+- best hr일 때마다 best hp 업데이트
+
+- 결국 각 hp조합마다 best hr을 구하고 그 best hr들의 best인 hp가 최종 best hp
+
+- best hp를 갖고 test 실행: test mode && best hp && train_real로 학습
