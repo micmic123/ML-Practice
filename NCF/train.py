@@ -61,10 +61,11 @@ def entry():
     if mode == 'train':
         if model == 'gmf':
             config = {
-                'lr': [1e-4],  # [1e-4, 5e-4, 1e-3],
-                'embed_dim': [128, 256],
+                'lr': [1e-3],  # [1e-4, 5e-4, 1e-3],
+                'embed_dim': [8, 16],
                 'neg_num': [4],
-                'batch_size': [256]
+                'batch_size': [1024],
+                'epochs': 40
             }
             tuning_GMF(config)
         elif model == 'mlp':
@@ -139,9 +140,9 @@ def evaluate(model, loader, train_dict):
         for user, item in loader:
             user, item = user.to(DEVICE), item.to(DEVICE)
             scores = model.predict(user, item_all)  # (128, item_num)
-            score_all.extend(scores)
+            score_all.append(scores)
             label.extend(item)
-        scores_all = torch.cat(tuple(score_all), dim=1)
+        score_all = torch.cat(tuple(score_all), dim=0)
         HR, NDCG = eval(score_all, label, train_dict, k=50)
 
     return HR, NDCG
@@ -183,7 +184,7 @@ def tuning_GMF(config):
         model.to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=hp['etc']['lr'])
         loader = train_real_generator.get_loader(hp['etc']['num_neg'], hp['etc']['batch_size'])
-        hr, loss = train(model, optimizer, loader)
+        hr, loss = train(model, optimizer, loader, epochs=config['epochs'])
 
         if hr > best_hr:
             best_hr = hr
