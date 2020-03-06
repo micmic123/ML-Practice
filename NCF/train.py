@@ -6,16 +6,17 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-from data import SampleGenerator
+from data import SampleGenerator, TestGenerator
 from model import GMF, MLP, NeuMF
 from utils import eval
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--mode', required=True, help='tuning or train')
+parser.add_argument('--mode', required=True, help='train or test')
 parser.add_argument('--model', required=True, help='GMF, MLP or NeuMF')
 parser.add_argument('--device', required=True, help='GPU id to use')
 args = parser.parse_args()
+print(args)
 
 # set GPU
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
@@ -45,6 +46,7 @@ with open(train_real_dict_path, 'r', encoding='utf-8') as f:
 # batch generator
 # train_tuning_generator = SampleGenerator(train_tuning)
 train_real_generator = SampleGenerator(train_real)
+test_loader = TestGenerator(testset).get_loader()
 print(f'[INFO] data loading finished')
 
 user_num = 6040
@@ -59,7 +61,7 @@ def entry():
     if mode == 'train':
         if model == 'gmf':
             config = {
-                'lr': [1e-4, 5e-4, 1e-3],
+                'lr': [1e-4],  # [1e-4, 5e-4, 1e-3],
                 'embed_dim': [128, 256],
                 'neg_num': [4],
                 'batch_size': [256]
@@ -83,7 +85,7 @@ def train_epoch(model, optimizer, loader, epoch):
     """ train for one epoch and return average loss """
     loss_ls = []
     for user, item, label in tqdm(loader, desc=f'epoch {epoch}'):
-        user, item, label = user.to(DEVICE), item.to(DEVICE), label(DEVICE)
+        user, item, label = user.to(DEVICE), item.to(DEVICE), label.to(DEVICE)
 
         scores = model(user, item)
         loss = F.binary_cross_entropy_with_logits(scores, label)  # default reduction='mean'
@@ -103,14 +105,14 @@ def train(model, optimizer, loader, epochs=10, verbose=True):
         - best HR@k, loss
     """
     best_HR = -1
-    best_loss = float('inf')
+    best_loss = float('inf')  # loss for one epoch with training set
     model.train()
 
     for epoch in range(epochs):
         start = time()
         loss = train_epoch(model, optimizer, loader, epoch)
         end = time()
-        HR, NDCG = evaluate(model, testset, train_real_dict)
+        HR, NDCG = evaluate(model, test_loader, train_real_dict)
 
         if HR > best_HR:
             best_HR = HR
@@ -126,16 +128,20 @@ def train(model, optimizer, loader, epochs=10, verbose=True):
     return best_HR, best_loss
 
 
-def evaluate(model, data, train_dict):
+def evaluate(model, loader, train_dict):
     """ return average HR@k, NDCG@k for valid or test set """
     model.eval()
-    user = torch.LongTensor(data[:, 0]).to(DEVICE)
     item_all = torch.LongTensor(range(item_num)).to(DEVICE)
-    label = data[:, 1]
+    label = []
+    score_all = []
 
     with torch.no_grad():
-        scores = model.predict(user, item_all)  # (user_num, item_num)
-        HR, NDCG = eval(scores, label, train_dict, k=50)
+        for user, item in loader:
+            user, item = user.to(DEVICE), item.to(DEVICE)
+            scores = model.predict(user, item_all)  # (128, item_num)
+            score_all.extend(scores)
+            label.extend(item)
+        HR, NDCG = eval(score_all, label, train_dict, k=50)
 
     return HR, NDCG
 

@@ -22,6 +22,18 @@ class MovieDataset(Dataset):
         return self.users.size(0)
 
 
+class TestDataset(Dataset):
+    def __init__(self, users, items):
+        self.users = users
+        self.items = items
+
+    def __getitem__(self, idx):
+        return self.users[idx], self.items[idx]
+
+    def __len__(self):
+        return self.users.size(0)
+
+
 class SampleGenerator:
     def __init__(self, data, num_user=6040, num_item=3706):
         """
@@ -55,3 +67,13 @@ class SampleGenerator:
         loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
         return loader
+
+
+class TestGenerator:
+    def __init__(self, data):
+        users = data[:, 0]
+        items = data[:, 1]
+        self.dataset = TestDataset(torch.LongTensor(users), items)
+
+    def get_loader(self):
+        return DataLoader(self.dataset, batch_size=128, shuffle=False)

@@ -30,16 +30,16 @@ class GMF(nn.Module):
     def predict(self, user, item):
         """
         :param
-            - user: (user_num, )
+            - user: (B, )
             - item: (item_num, )
         :return
-            - logits: scores of (user_num, item_num)
+            - logits: scores of (B, item_num)
         """
         user_embedding = self.user_embed(user)
-        user_embedding = user_embedding.unsqueeze(1)  # (user_num, 1, embed_dim)
+        user_embedding = user_embedding.unsqueeze(1)  # (B, 1, embed_dim)
         item_embedding = self.item_embed(item)  # (item_num, embed_dim)
-        x = user_embedding * item_embedding  # (user_num, item_num, embed_dim)
-        scores = self.linear(x)  # (user_num, item_num, 1)
+        x = user_embedding * item_embedding  # (B, item_num, embed_dim)
+        scores = self.linear(x)  # (B, item_num, 1)
 
         return scores.squeeze()
 
