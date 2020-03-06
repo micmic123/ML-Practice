@@ -141,6 +141,7 @@ def evaluate(model, loader, train_dict):
             scores = model.predict(user, item_all)  # (128, item_num)
             score_all.extend(scores)
             label.extend(item)
+        scores_all = torch.cat(tuple(score_all), dim=1)
         HR, NDCG = eval(score_all, label, train_dict, k=50)
 
     return HR, NDCG
