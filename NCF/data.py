@@ -34,7 +34,7 @@ class SampleGenerator:
         self.ma = {tuple(line) for line in data}
 
     def get_loader(self, num_neg, batch_size):
-        """ Loader for an epoch wih negative sampled data"""
+        """ Loader for an epoch wih negative sampled data """
         users, items, labels = [], [], []
         ma = self.ma
 

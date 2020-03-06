@@ -1,4 +1,4 @@
-import itertools, argparse, os, dill
+import itertools, argparse, os, json
 from time import time
 from tqdm import tqdm
 import numpy as np
@@ -8,6 +8,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from data import SampleGenerator
 from model import GMF, MLP, NeuMF
+from utils import eval
+
 
 parser = argparse.ArgumentParser(description='')
 parser.add_argument('--mode', required=True, help='tuning or train')
@@ -23,20 +25,25 @@ print(f'[INFO] {DEVICE} activated')
 
 # data path
 base_path = os.path.expanduser('~/dataset/ml-1m/leave-one-out')
-train_tuning_path = os.path.join(base_path, 'train_tuning.csv')
+# train_tuning_path = os.path.join(base_path, 'train_tuning.csv')
 train_real_path = os.path.join(base_path, 'train_real.csv')
-validset_path = os.path.join(base_path, 'validset.csv')
+train_real_dict_path = os.path.join(base_path, 'train_real_dict.json')
+# validset_path = os.path.join(base_path, 'validset.csv')
 testset_path = os.path.join(base_path, 'testset.csv')
+model_path = './snapshot'
 
 # data of ndarray
 print(f'[INFO] data loading started')
-train_tuning = pd.read_csv(train_tuning_path, header='None').values
-train_real = pd.read_csv(train_real_path, header='None').values
-validset = pd.read_csv(validset_path, header='None').values
-testset = pd.read_csv(testset_path, header='None').values
+# train_tuning = pd.read_csv(train_tuning_path, header=None).values
+train_real = pd.read_csv(train_real_path, header=None).values
+# validset = pd.read_csv(validset_path, header=None).values
+testset = pd.read_csv(testset_path, header=None).values
+with open(train_real_dict_path, 'r', encoding='utf-8') as f:
+    train_real_dict = json.load(f, object_hook=lambda d: {int(k): {int(i) for i in v} for k, v in d.items()})
+
 
 # batch generator
-train_tuning_generator = SampleGenerator(train_tuning)
+# train_tuning_generator = SampleGenerator(train_tuning)
 train_real_generator = SampleGenerator(train_real)
 print(f'[INFO] data loading finished')
 
@@ -48,7 +55,8 @@ def entry():
     mode = args.mode.lower()
     model = args.model.lower()
 
-    if mode == 'tuning':
+    # tuning model with train_real and save snapshot of the best model
+    if mode == 'train':
         if model == 'gmf':
             config = {
                 'lr': [1e-4, 5e-4, 1e-3],
@@ -61,75 +69,93 @@ def entry():
             pass
         elif model == 'neumf':
             pass
-    elif mode == 'train':
+    # load the best model and run test with testset
+    elif mode == 'test':
         # TODO
         """
-        1. get best hp
-        2. train with train_real and save model
-        3. test
+        1. load the best model
+        2. test and save result
         """
         pass
 
 
 def train_epoch(model, optimizer, loader, epoch):
+    """ train for one epoch and return average loss """
+    loss_ls = []
     for user, item, label in tqdm(loader, desc=f'epoch {epoch}'):
         user, item, label = user.to(DEVICE), item.to(DEVICE), label(DEVICE)
 
         scores = model(user, item)
-        loss = torch.mean(F.binary_cross_entropy_with_logits(scores, label))
+        loss = F.binary_cross_entropy_with_logits(scores, label)  # default reduction='mean'
+        loss_ls.append(loss.item())
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
+    return sum(loss_ls) / len(loss_ls)
+
 
 def train(model, optimizer, loader, epochs=10, verbose=True):
-    """
+    """  train the given model
+
     :return
-        - best loss_val, acc_val
+        - best HR@k, loss
     """
-    best_hr = -1
+    best_HR = -1
     best_loss = float('inf')
     model.train()
 
     for epoch in range(epochs):
         start = time()
-        train_epoch(model, optimizer, loader, epoch)
+        loss = train_epoch(model, optimizer, loader, epoch)
         end = time()
-        loss_val, hr_val = evaluate(model, validset)
+        HR, NDCG = evaluate(model, testset, train_real_dict)
 
-        # TODO
-        # verbose
-        # update
+        if HR > best_HR:
+            best_HR = HR
+            best_loss = loss
+            save_model(model, HR)
+        if verbose:
+            t = end - start
+            print(f'[Epoch {epoch}, {t:.1f}s] loss: {loss} | HR@k: {HR} | NDCG@k: {NDCG}')
+
+    if verbose:
+        print(f'[INFO] the best HR@k was {best_HR} with loss {best_loss}')
+
+    return best_HR, best_loss
 
 
-def evaluate(model, data):
+def evaluate(model, data, train_dict):
+    """ return average HR@k, NDCG@k for valid or test set """
     model.eval()
     user = torch.LongTensor(data[:, 0]).to(DEVICE)
     item_all = torch.LongTensor(range(item_num)).to(DEVICE)
-    label = torch.LongTensor(data[:, 1]).to(DEVICE)
+    label = data[:, 1]
 
     with torch.no_grad():
-        scores = model(user, item_all)  # (user_num, item_num)
-        # TODO
-        # metric with label
+        scores = model.predict(user, item_all)  # (user_num, item_num)
+        HR, NDCG = eval(scores, label, train_dict, k=50)
 
-    return loss, val
-
-
-def save_model():
-    pass
+    return HR, NDCG
 
 
-def save_hp():
-    pass
+def save_model(model, HR):
+    if not os.path.isdir(model_path):
+        os.mkdir(model_path)
+    target_path = os.path.join(model_path, f'{model.__class__.__name__}_{HR:.4f}.pt')
+    if os.path.isfile(target_path):
+        print('[WARNING] snapshot overwriting occured')
+        target_path = os.path.join(model_path, f'{model.__class__.__name__}_{HR:.4f}_2.pt')
+
+    torch.save(model.state_dict(), target_path)
 
 
 def tuning_GMF(config):
     candidates = [config['lr'], config['embed_dim'], config['neg_num'], config['batch_size']]
     best_hp = None
+    best_loss = float('inf')
     best_hr = -1
-    best_model = None
 
     for hps in itertools.product(*candidates):
         lr, embed_dim, num_neg, batch_size = hps
@@ -145,17 +171,19 @@ def tuning_GMF(config):
                 'batch_size': batch_size
             }
         }
-
+        print(f'[INFO] hyperparameters:\n{hp}')
         model = GMF(hp['model'])
         model.to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=hp['etc']['lr'])
-        loader = train_tuning_generator.get_loader(hp['etc']['num_neg'], hp['etc']['batch_size'])
-        loss_val, hr_val = train(model, optimizer, loader)
+        loader = train_real_generator.get_loader(hp['etc']['num_neg'], hp['etc']['batch_size'])
+        hr, loss = train(model, optimizer, loader)
 
-        if hr_val > best_hr:
-            best_hr = hr_val
+        if hr > best_hr:
+            best_hr = hr
             best_hp = hp
-            best_model = model
+            best_loss = loss
+
+    print(f'[INFO] the best hyperparameters is \n{best_hp}\n HR@k: {best_hr} | loss: {best_loss}')
 
 
 if __name__ == '__main__':

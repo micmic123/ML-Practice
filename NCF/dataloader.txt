@@ -1,6 +1,7 @@
 *refs
 https://github.com/yihong-chen/neural-collaborative-filtering/blob/master/src/data.py
 https://github.com/yihong-chen/neural-collaborative-filtering/blob/master/src/train.py
+https://github.com/rdevooght/sequence-based-recommendations
 
 [전처리로 생성하는 파일]
 - train: (user, item)의 형태로 positive instance만 담고 있는 리스트
@@ -25,4 +26,17 @@ https://github.com/yihong-chen/neural-collaborative-filtering/blob/master/src/tr
 
 - 결국 각 hp조합마다 best hr을 구하고 그 best hr들의 best인 hp가 최종 best hp
 
-- best hp를 갖고 test 실행: test mode && best hp && train_real로 학습
+- best hp를 갖고 test 실행: 재학습은 하지 않음
+
+[best model]
+- train / valid / test set 나누기
+
+- 하이퍼파라미터 조합을 바꿔가며 trainset으로 학습 후 validset으로 검증 반복
+
+- validset에 대해 best performance가 나온 순간(특정 HP, epoch)의 model A 저장 => 해당 model A에 바로 testset 적용하고 결과 기록
+
+- @A의 HP를 최적의 HP로 삼고, 더 많은 trainset으로 학습시키기 위해 trainset + validset 합쳐서 trainset으로 만들고
+  처음부터 다시 학습한다면 언제 학습을 종료해야할까? 전체 trainset에 대한 loss 최소인 때의 모델로 최종 학습된 모델 결정?
+  => trainset에 대한 최소 loss or 최대 acc가 testset에 대해서도 best일 거라는 보장 없음. 오히려 trainset에 overfitting된 모델 탄생.
+  => 결국 미지의 set이 더이상 없으므로 testset을 쓰지 않는 이상 epoch 중에서 언제가 generally 최적의 학습된 상태인지 알 방법이 없음.
+  => 따라서 model A에 바로 testset 적용하는게 맞는 듯.
