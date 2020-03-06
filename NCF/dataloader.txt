@@ -2,6 +2,7 @@
 https://github.com/yihong-chen/neural-collaborative-filtering/blob/master/src/data.py
 https://github.com/yihong-chen/neural-collaborative-filtering/blob/master/src/train.py
 https://github.com/rdevooght/sequence-based-recommendations
+https://stackoverflow.com/questions/42703500/best-way-to-save-a-trained-model-in-pytorch
 
 [전처리로 생성하는 파일]
 - train: (user, item)의 형태로 positive instance만 담고 있는 리스트

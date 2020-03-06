@@ -12,9 +12,11 @@ from utils import eval
 
 
 parser = argparse.ArgumentParser(description='')
-parser.add_argument('--mode', required=True, help='train or test')
+parser.add_argument('--mode', required=True, help='train or supplement')
 parser.add_argument('--model', required=True, help='GMF, MLP or NeuMF')
 parser.add_argument('--device', required=True, help='GPU id to use')
+parser.add_argument('--target', required=False, help='target model to supplement')
+parser.add_argument('--epochs', required=False, help='epochs to supplement')
 args = parser.parse_args()
 print(args)
 
@@ -42,13 +44,13 @@ testset = pd.read_csv(testset_path, header=None).values
 with open(train_real_dict_path, 'r', encoding='utf-8') as f:
     train_real_dict = json.load(f, object_hook=lambda d: {int(k): {int(i) for i in v} for k, v in d.items()})
 
-
 # batch generator
 # train_tuning_generator = SampleGenerator(train_tuning)
 train_real_generator = SampleGenerator(train_real)
 test_loader = TestGenerator(testset).get_loader()
 print(f'[INFO] data loading finished')
 
+# etc
 user_num = 6040
 item_num = 3706
 
@@ -62,10 +64,10 @@ def entry():
         if model == 'gmf':
             config = {
                 'lr': [1e-3],  # [1e-4, 5e-4, 1e-3],
-                'embed_dim': [8, 16],
+                'embed_dim': [4, 8, 16],
                 'neg_num': [4],
-                'batch_size': [1024],
-                'epochs': 40
+                'batch_size': [512, 1024],
+                'epochs': 100
             }
             tuning_GMF(config)
         elif model == 'mlp':
@@ -73,7 +75,9 @@ def entry():
         elif model == 'neumf':
             pass
     # load the best model and run test with testset
-    elif mode == 'test':
+    elif mode == 'supplement':
+        model = args.target
+        epochs = args.epochs
         # TODO
         """
         1. load the best model
@@ -85,6 +89,7 @@ def entry():
 def train_epoch(model, optimizer, loader, epoch):
     """ train for one epoch and return average loss """
     loss_ls = []
+
     for user, item, label in tqdm(loader, desc=f'epoch {epoch}'):
         user, item, label = user.to(DEVICE), item.to(DEVICE), label.to(DEVICE)
 
@@ -149,6 +154,9 @@ def evaluate(model, loader, train_dict):
 
 
 def save_model(model, HR):
+    # TODO
+    # save epoch, model and optimizer for subsequent additional learning
+    # https://stackoverflow.com/questions/42703500/best-way-to-save-a-trained-model-in-pytorch
     if not os.path.isdir(model_path):
         os.mkdir(model_path)
     target_path = os.path.join(model_path, f'{model.__class__.__name__}_{HR:.4f}.pt')
