@@ -1,7 +1,3 @@
-# Metrics
-import torch
-
-
 def filtering(scores, train_dict, k):
     """ filter out items in train_dict for each user and return intended real-recommended top-k items"""
     scores = scores.argsort(dim=1, descending=True).tolist()

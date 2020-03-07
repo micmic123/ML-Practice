@@ -7,16 +7,20 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from data import SampleGenerator, TestGenerator
-from model import GMF, MLP, NeuMF
-from utils import eval
+from models.GMF import GMF
+from models.MLP import MLP
+from models.NeuMF import NeuMF
+from utils.metrics import eval
+from utils.Tuner import GMFTuner, MLPTuner, NeuMFTuner
 
 
-parser = argparse.ArgumentParser(description='')
+parser = argparse.ArgumentParser(description='*** nohup python -u train.py > [log_name].log & ***')
 parser.add_argument('--mode', required=True, help='train or supplement')
 parser.add_argument('--model', required=True, help='GMF, MLP or NeuMF')
 parser.add_argument('--device', required=True, help='GPU id to use')
 parser.add_argument('--target', required=False, help='target model to supplement')
 parser.add_argument('--epochs', required=False, help='epochs to supplement')
+parser.add_argument('--tqdm', required=False, help='on or off for printing progressbar', default='off')
 args = parser.parse_args()
 print(args)
 
@@ -50,9 +54,14 @@ train_real_generator = SampleGenerator(train_real)
 test_loader = TestGenerator(testset).get_loader()
 print(f'[INFO] data loading finished')
 
-# etc
-user_num = 6040
-item_num = 3706
+# tqdm on/off
+is_tqdm = True if args.tqdm.lower() == 'on' else False
+
+# meta data information
+meta = {
+    'user_num': 6040,
+    'item_num': 3706
+}
 
 
 def entry():
@@ -64,16 +73,29 @@ def entry():
         if model == 'gmf':
             config = {
                 'lr': [1e-3],  # [1e-4, 5e-4, 1e-3],
-                'embed_dim': [4, 8, 16],
+                'embed_dim': [16, 32, 64],
                 'neg_num': [4],
-                'batch_size': [512, 1024],
-                'epochs': 100
+                'batch_size': [1024],
+                'epochs': 80
             }
-            tuning_GMF(config)
+            tuner = GMFTuner(config, meta)
         elif model == 'mlp':
-            pass
+            config = {
+                'lr': [1e-3],  # [1e-4, 5e-4, 1e-3],
+                'embed_dim': [16, 32, 64],
+                'layer_num': [3],
+                'neg_num': [4],
+                'batch_size': [1024],
+                'epochs': 80
+            }
+            tuner = MLPTuner(config, meta)
         elif model == 'neumf':
-            pass
+            config = {
+
+            }
+            tuner = NeuMFTuner(config, meta)
+        tuning(tuner)
+
     # load the best model and run test with testset
     elif mode == 'supplement':
         model = args.target
@@ -89,8 +111,9 @@ def entry():
 def train_epoch(model, optimizer, loader, epoch):
     """ train for one epoch and return average loss """
     loss_ls = []
+    loader = tqdm(loader, desc=f'epoch {epoch}') if is_tqdm else loader
 
-    for user, item, label in tqdm(loader, desc=f'epoch {epoch}'):
+    for user, item, label in loader:
         user, item, label = user.to(DEVICE), item.to(DEVICE), label.to(DEVICE)
 
         scores = model(user, item)
@@ -101,6 +124,8 @@ def train_epoch(model, optimizer, loader, epoch):
         loss.backward()
         optimizer.step()
 
+    if is_tqdm:
+        loader.close()
     return sum(loss_ls) / len(loss_ls)
 
 
@@ -137,7 +162,7 @@ def train(model, optimizer, loader, epochs=10, verbose=True):
 def evaluate(model, loader, train_dict):
     """ return average HR@k, NDCG@k for valid or test set """
     model.eval()
-    item_all = torch.LongTensor(range(item_num)).to(DEVICE)
+    item_all = torch.LongTensor(range(meta['item_num'])).to(DEVICE)
     label = []
     score_all = []
 
@@ -167,32 +192,18 @@ def save_model(model, HR):
     torch.save(model.state_dict(), target_path)
 
 
-def tuning_GMF(config):
-    candidates = [config['lr'], config['embed_dim'], config['neg_num'], config['batch_size']]
+def tuning(tuner):
     best_hp = None
     best_loss = float('inf')
     best_hr = -1
 
-    for hps in itertools.product(*candidates):
-        lr, embed_dim, num_neg, batch_size = hps
-        hp = {
-            'model': {
-                'user_num': user_num,
-                'item_num': item_num,
-                'embed_dim': embed_dim
-            },
-            'etc': {
-                'lr': lr,
-                'num_neg': num_neg,
-                'batch_size': batch_size
-            }
-        }
+    for hp in tuner.get_hp():
         print(f'[INFO] hyperparameters:\n{hp}')
         model = GMF(hp['model'])
         model.to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=hp['etc']['lr'])
         loader = train_real_generator.get_loader(hp['etc']['num_neg'], hp['etc']['batch_size'])
-        hr, loss = train(model, optimizer, loader, epochs=config['epochs'])
+        hr, loss = train(model, optimizer, loader, epochs=hp['etc']['epochs'])
 
         if hr > best_hr:
             best_hr = hr

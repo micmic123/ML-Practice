@@ -1,6 +1,4 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class GMF(nn.Module):
@@ -15,7 +13,7 @@ class GMF(nn.Module):
         self.linear = nn.Linear(self.embed_dim, 1)
 
     def forward(self, user, item):
-        """
+        """ calculate score of (user[i], item[i])
         :param
             - user, item: (B, )
         :return
@@ -23,12 +21,12 @@ class GMF(nn.Module):
         """
         user_embedding = self.user_embed(user)
         item_embedding = self.item_embed(item)
-        logits = self.linear(user_embedding * item_embedding)
+        logits = self.linear(user_embedding * item_embedding).squeeze()
 
-        return logits.squeeze()
+        return logits
 
     def predict(self, user, item):
-        """
+        """ calculate scores of (user[i], item[:])
         :param
             - user: (B, )
             - item: (item_num, )
@@ -42,11 +40,3 @@ class GMF(nn.Module):
         scores = self.linear(x)  # (B, item_num, 1)
 
         return scores.squeeze()
-
-
-class MLP(nn.Module):
-    pass
-
-
-class NeuMF(nn.Module):
-    pass
