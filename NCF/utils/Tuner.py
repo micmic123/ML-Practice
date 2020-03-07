@@ -25,7 +25,7 @@ class BaseTuner:
 class GMFTuner(BaseTuner):
     def get_candidates(self):
         config = self.config
-        candidates = [config['lr'], config['embed_dim'], config['neg_num'], config['batch_size']]
+        candidates = (config['lr'], config['embed_dim'], config['neg_num'], config['batch_size'])
 
         return candidates
 
@@ -49,7 +49,30 @@ class GMFTuner(BaseTuner):
 
 
 class MLPTuner(BaseTuner):
-    pass
+    def get_candidates(self):
+        config = self.config
+        candidates = (config['lr'], config['embed_dim'], config['layer_num'], config['neg_num'], config['batch_size'])
+
+        return candidates
+
+    def get_combination(self, hps):
+        lr, embed_dim, layer_num, num_neg, batch_size = hps
+        hp = {
+            'model': {
+                'user_num': self.user_num,
+                'item_num': self.item_num,
+                'embed_dim': embed_dim,
+                'layer_num': layer_num
+            },
+            'etc': {
+                'lr': lr,
+                'num_neg': num_neg,
+                'batch_size': batch_size,
+                'epochs': self.epochs
+            }
+        }
+
+        return hp
 
 
 class NeuMFTuner(BaseTuner):

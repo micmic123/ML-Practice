@@ -49,6 +49,7 @@ class SampleGenerator:
         """ Loader for an epoch wih negative sampled data """
         users, items, labels = [], [], []
         ma = self.ma
+        num_item = self.num_item
 
         for user, item in self.data:
             users.append(user)
@@ -57,9 +58,9 @@ class SampleGenerator:
 
             # negative sampling
             for i in range(num_neg):
-                sample = np.random.randint(self.num_item)
+                sample = int(num_item * random.random())
                 while (user, sample) in ma:
-                    sample = np.random.randint(self.num_item)
+                    sample = int(num_item * random.random())
                 users.append(user)
                 items.append(sample)
                 labels.append(0)

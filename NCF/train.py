@@ -14,7 +14,7 @@ from utils.metrics import eval
 from utils.Tuner import GMFTuner, MLPTuner, NeuMFTuner
 
 
-parser = argparse.ArgumentParser(description='*** nohup python -u train.py > [log_name].log & ***')
+parser = argparse.ArgumentParser(description='e.g. nohup python -u train.py --options > [log_name].log &')
 parser.add_argument('--mode', required=True, help='train or supplement')
 parser.add_argument('--model', required=True, help='GMF, MLP or NeuMF')
 parser.add_argument('--device', required=True, help='GPU id to use')
@@ -55,7 +55,7 @@ test_loader = TestGenerator(testset).get_loader()
 print(f'[INFO] data loading finished')
 
 # tqdm on/off
-is_tqdm = True if args.tqdm.lower() == 'on' else False
+is_tqdm = True if args.tqdm.lower() == 'on' or args.tqdm.lower() == 'true' else False
 
 # meta data information
 meta = {
@@ -75,26 +75,29 @@ def entry():
                 'lr': [1e-3],  # [1e-4, 5e-4, 1e-3],
                 'embed_dim': [16, 32, 64],
                 'neg_num': [4],
-                'batch_size': [1024],
+                'batch_size': [512],
                 'epochs': 80
             }
             tuner = GMFTuner(config, meta)
+            MODEL = GMF
         elif model == 'mlp':
             config = {
                 'lr': [1e-3],  # [1e-4, 5e-4, 1e-3],
                 'embed_dim': [16, 32, 64],
                 'layer_num': [3],
                 'neg_num': [4],
-                'batch_size': [1024],
+                'batch_size': [512],
                 'epochs': 80
             }
             tuner = MLPTuner(config, meta)
+            MODEL = MLP
         elif model == 'neumf':
             config = {
 
             }
             tuner = NeuMFTuner(config, meta)
-        tuning(tuner)
+            MODEL = NeuMF
+        tuning(tuner, MODEL)
 
     # load the best model and run test with testset
     elif mode == 'supplement':
@@ -106,6 +109,29 @@ def entry():
         2. test and save result
         """
         pass
+
+
+def tuning(tuner, MODEL):
+    best_hp = None
+    best_loss = float('inf')
+    best_hr = -1
+    print(f'model: {MODEL.__name__}')
+
+    # for each hyperparamter combination
+    for hp in tuner.get_hp():
+        print(f'[INFO] hyperparameters:\n{hp}')
+        model = MODEL(hp['model'])
+        model.to(DEVICE)
+        optimizer = optim.Adam(model.parameters(), lr=hp['etc']['lr'])
+        loader_option = (hp['etc']['num_neg'], hp['etc']['batch_size'])
+        hr, loss = train(model, optimizer, loader_option, epochs=hp['etc']['epochs'])
+
+        if hr > best_hr:
+            best_hr = hr
+            best_hp = hp
+            best_loss = loss
+
+    print(f'[INFO] the best hyperparameters is \n{best_hp}\n HR@k: {best_hr} | loss: {best_loss}')
 
 
 def train_epoch(model, optimizer, loader, epoch):
@@ -129,7 +155,7 @@ def train_epoch(model, optimizer, loader, epoch):
     return sum(loss_ls) / len(loss_ls)
 
 
-def train(model, optimizer, loader, epochs=10, verbose=True):
+def train(model, optimizer, loader_option, epochs=10, verbose=True):
     """  train the given model
 
     :return
@@ -137,9 +163,11 @@ def train(model, optimizer, loader, epochs=10, verbose=True):
     """
     best_HR = -1
     best_loss = float('inf')  # loss for one epoch with training set
+    best_epoch = -1
     model.train()
 
     for epoch in range(epochs):
+        loader = train_real_generator.get_loader(*loader_option)
         start = time()
         loss = train_epoch(model, optimizer, loader, epoch)
         end = time()
@@ -148,13 +176,14 @@ def train(model, optimizer, loader, epochs=10, verbose=True):
         if HR > best_HR:
             best_HR = HR
             best_loss = loss
+            best_epoch = epoch
             save_model(model, HR)
         if verbose:
             t = end - start
-            print(f'[Epoch {epoch}, {t:.1f}s] loss: {loss} | HR@k: {HR} | NDCG@k: {NDCG}')
+            print(f'[Epoch {epoch}, {t:.1f}s] loss: {loss:.4f} | HR@k: {HR:.4f} | NDCG@k: {NDCG}')
 
     if verbose:
-        print(f'[INFO] the best HR@k was {best_HR} with loss {best_loss}')
+        print(f'[INFO] the best HR@k was {best_HR} with loss {best_loss} at {best_epoch}-th epoch')
 
     return best_HR, best_loss
 
@@ -184,33 +213,15 @@ def save_model(model, HR):
     # https://stackoverflow.com/questions/42703500/best-way-to-save-a-trained-model-in-pytorch
     if not os.path.isdir(model_path):
         os.mkdir(model_path)
+
     target_path = os.path.join(model_path, f'{model.__class__.__name__}_{HR:.4f}.pt')
-    if os.path.isfile(target_path):
+    cnt = 0
+    while os.path.isfile(target_path):
         print('[WARNING] snapshot overwriting occured')
-        target_path = os.path.join(model_path, f'{model.__class__.__name__}_{HR:.4f}_2.pt')
+        cnt += 1
+        target_path = os.path.join(model_path, f'{model.__class__.__name__}_{HR:.4f}_{cnt}.pt')
 
     torch.save(model.state_dict(), target_path)
-
-
-def tuning(tuner):
-    best_hp = None
-    best_loss = float('inf')
-    best_hr = -1
-
-    for hp in tuner.get_hp():
-        print(f'[INFO] hyperparameters:\n{hp}')
-        model = GMF(hp['model'])
-        model.to(DEVICE)
-        optimizer = optim.Adam(model.parameters(), lr=hp['etc']['lr'])
-        loader = train_real_generator.get_loader(hp['etc']['num_neg'], hp['etc']['batch_size'])
-        hr, loss = train(model, optimizer, loader, epochs=hp['etc']['epochs'])
-
-        if hr > best_hr:
-            best_hr = hr
-            best_hp = hp
-            best_loss = loss
-
-    print(f'[INFO] the best hyperparameters is \n{best_hp}\n HR@k: {best_hr} | loss: {best_loss}')
 
 
 if __name__ == '__main__':

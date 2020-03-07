@@ -11,7 +11,7 @@ class MLP(nn.Module):
         self.layer_num = config['layer_num']
         self.linear_dims = [2*self.embed_dim]
         for i in range(self.layer_num):
-            self.linear_dims.append(self.linear_dims[-1]/2)
+            self.linear_dims.append(self.linear_dims[-1]//2)
 
         self.user_embed = nn.Embedding(self.user_num, self.embed_dim)
         self.item_embed = nn.Embedding(self.item_num, self.embed_dim)
