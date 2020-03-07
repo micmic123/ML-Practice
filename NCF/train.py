@@ -72,18 +72,18 @@ def entry():
     if mode == 'train':
         if model == 'gmf':
             config = {
-                'lr': [1e-3],  # [1e-4, 5e-4, 1e-3],
-                'embed_dim': [16, 32, 64],
+                'lr': [1e-3],  # 1e-3,
+                'embed_dim': [16, 32, 64],  # 32
                 'neg_num': [4],
                 'batch_size': [512],
-                'epochs': 80
+                'epochs': 200
             }
             tuner = GMFTuner(config, meta)
             MODEL = GMF
         elif model == 'mlp':
             config = {
-                'lr': [1e-3],  # [1e-4, 5e-4, 1e-3],
-                'embed_dim': [16, 32, 64],
+                'lr': [1e-3],  # 1e-3,
+                'embed_dim': [16, 32, 64],  # 64
                 'layer_num': [3],
                 'neg_num': [4],
                 'batch_size': [512],
@@ -124,7 +124,7 @@ def tuning(tuner, MODEL):
         model.to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=hp['etc']['lr'])
         loader_option = (hp['etc']['num_neg'], hp['etc']['batch_size'])
-        hr, loss = train(model, optimizer, loader_option, epochs=hp['etc']['epochs'])
+        hr, loss = train(model, optimizer, loader_option, hp, epochs=hp['etc']['epochs'])
 
         if hr > best_hr:
             best_hr = hr
@@ -155,7 +155,7 @@ def train_epoch(model, optimizer, loader, epoch):
     return sum(loss_ls) / len(loss_ls)
 
 
-def train(model, optimizer, loader_option, epochs=10, verbose=True):
+def train(model, optimizer, loader_option, hp, epochs=10, verbose=True):
     """  train the given model
 
     :return
@@ -177,10 +177,10 @@ def train(model, optimizer, loader_option, epochs=10, verbose=True):
             best_HR = HR
             best_loss = loss
             best_epoch = epoch
-            save_model(model, HR)
+            save_model(model, optimizer, HR, hp, epochs)
         if verbose:
             t = end - start
-            print(f'[Epoch {epoch}, {t:.1f}s] loss: {loss:.4f} | HR@k: {HR:.4f} | NDCG@k: {NDCG}')
+            print(f'[Epoch {epoch:>2}, {t:.1f}s] loss: {loss:.4f} | HR@k: {HR:.4f} | NDCG@k: {NDCG}')
 
     if verbose:
         print(f'[INFO] the best HR@k was {best_HR} with loss {best_loss} at {best_epoch}-th epoch')
@@ -207,13 +207,17 @@ def evaluate(model, loader, train_dict):
     return HR, NDCG
 
 
-def save_model(model, HR):
-    # TODO
-    # save epoch, model and optimizer for subsequent additional learning
-    # https://stackoverflow.com/questions/42703500/best-way-to-save-a-trained-model-in-pytorch
+def save_model(model, optimizer, HR, hp, epochs):
+    """ save model, optimizer, hyperparameters and epochs for subsequent additional learning """
     if not os.path.isdir(model_path):
         os.mkdir(model_path)
 
+    state = {
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'hp': hp,
+        'epochs': epochs
+    }
     target_path = os.path.join(model_path, f'{model.__class__.__name__}_{HR:.4f}.pt')
     cnt = 0
     while os.path.isfile(target_path):
@@ -221,7 +225,7 @@ def save_model(model, HR):
         cnt += 1
         target_path = os.path.join(model_path, f'{model.__class__.__name__}_{HR:.4f}_{cnt}.pt')
 
-    torch.save(model.state_dict(), target_path)
+    torch.save(state, target_path)
 
 
 if __name__ == '__main__':
