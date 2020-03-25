@@ -73,7 +73,7 @@ def entry():
         if model == 'gmf':
             config = {
                 'lr': [1e-3],  # 1e-3,
-                'embed_dim': [16, 32, 64],  # 32
+                'embed_dim': [32],  # 32
                 'neg_num': [4],
                 'batch_size': [512],
                 'epochs': 200
