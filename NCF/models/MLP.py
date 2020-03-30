@@ -21,7 +21,7 @@ class MLP(nn.Module):
         self.activation = nn.ReLU()
         self.affine_out = nn.Linear(self.linear_dims[-1], 1)
 
-    def forward(self, user, item, pred=False):
+    def forward(self, user, item):
         user_embedding = self.user_embed(user)
         item_embedding = self.item_embed(item)
         x = torch.cat((user_embedding, item_embedding), dim=1)
