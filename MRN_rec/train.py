@@ -67,7 +67,7 @@ def entry():
                 'hidden_size': [64],
                 'mrn_in_size': [64],
                 'fcl_size': [64],
-                'neg_num': [4],
+                'num_neg': [4],
                 'batch_size': [1024],
                 'epochs': 80,
                 'device': DEVICE
@@ -79,7 +79,7 @@ def entry():
                 'lr': [1e-3],  # 1e-3,
                 'embed_dim': [16, 32, 64],  # 64
                 'layer_num': [3],
-                'neg_num': [4],
+                'num_neg': [4],
                 'batch_size': [512],
                 'epochs': 80
             }
@@ -128,22 +128,27 @@ def tuning(tuner, MODEL):
     print(f'[INFO] the best hyperparameters is \n{best_hp}\n HR@k: {best_hr} | loss: {best_loss}')
 
 
-def train_epoch(model, optimizer, loader, epoch, label):
+def train_epoch(model, optimizer, loader, epoch, num_neg):
     """ train for one epoch and return average loss """
     loss_ls = []
     loader = tqdm(loader, desc=f'epoch {epoch}') if is_tqdm else loader
-
+    # cnt = 0
     for user, item, behavior, sample, mask_len in loader:
         user, item, sample, mask_len = user.to(DEVICE), item.to(DEVICE), sample.to(DEVICE), mask_len.to(DEVICE)
 
         # sample, label, scores: (B, 1 + neg_num)
-        scores = model(user, item, behavior, mask_len, sample)
+        scores = model(user, item, behavior, mask_len)
+        scores = scores[[[i] for i in range(user.size(0))], sample - 1]
+        label = torch.FloatTensor([([1] + ([0] * num_neg)) for i in range(user.size(0))]).to(DEVICE)
+
         loss = F.binary_cross_entropy_with_logits(scores, label)
         loss_ls.append(loss.item())
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        # cnt += 1
+        # if cnt == 1: break
 
     if is_tqdm:
         loader.close()
@@ -159,27 +164,27 @@ def train(model, optimizer, loader_option, hp, epochs=10, verbose=True):
     best_HR = -1
     best_loss = float('inf')  # loss for one epoch with training set
     best_epoch = -1
-    label = torch.FloatTensor([([1] + ([0] * loader_option[0])) for i in range(loader_option[1])]).to(DEVICE)
     model.train()
 
     for epoch in range(epochs):
-        loader = train_generator.get_loader(*loader_option)
         start = time()
-        loss = train_epoch(model, optimizer, loader, epoch, label)
+        loader = train_generator.get_loader(*loader_option)
+        loss = train_epoch(model, optimizer, loader, epoch, loader_option[0])
+        HRs, NDCGs = evaluate(model, test_loader, train_item)
         end = time()
-        HR, NDCG = evaluate(model, test_loader, train_item)
 
-        if HR > best_HR:
-            best_HR = HR
+        if HRs[3] > best_HR:
+            best_HR = HRs[3]
             best_loss = loss
             best_epoch = epoch
-            save_model(model, optimizer, HR, hp, epochs)
+            save_model(model, optimizer, HRs[3], hp, epochs)
         if verbose:
             t = end - start
-            print(f'[Epoch {epoch:>2}, {t:.1f}s] loss: {loss:.4f} | HR@k: {HR:.4f} | NDCG@k: {NDCG}')
+            print(f'[Epoch {epoch:>2}, {t:.1f}s] loss: {loss:.4f} | k: [1, 5, 10, 20, 50]')
+            print(f'[HR@k: {HRs:} | NDCG@k: {NDCGs}]')
 
     if verbose:
-        print(f'[INFO] the best HR@k was {best_HR} with loss {best_loss} at {best_epoch}-th epoch')
+        print(f'[INFO] the best HR@20 was {best_HR} with loss {best_loss} at {best_epoch}-th epoch')
 
     return best_HR, best_loss
 
@@ -187,20 +192,23 @@ def train(model, optimizer, loader_option, hp, epochs=10, verbose=True):
 def evaluate(model, loader, train_dict):
     """ return average HR@k, NDCG@k for valid or test set """
     model.eval()
-    item_all = torch.LongTensor(range(meta['item_num'])).to(DEVICE)
-    label = []
-    score_all = []
+    test_num = 0
+    HR_all = []
+    NDCG_all = []
 
     with torch.no_grad():
-        for user, item in loader:
-            user, item = user.to(DEVICE), item.to(DEVICE)
-            scores = model.predict(user, item_all)  # (128, item_num)
-            score_all.append(scores)
-            label.extend(item)
-        score_all = torch.cat(tuple(score_all), dim=0)
-        HR, NDCG = eval(score_all, label, train_dict, k=50)
+        for user, item, behavior, y, mask_len in loader:
+            y = y.view(-1).tolist()
+            user, item, mask_len = user.to(DEVICE), item.to(DEVICE), mask_len.to(DEVICE)
+            scores = model(user, item, behavior, mask_len)
+            HR_sum, NDCG_sum = eval(user.tolist(), scores, y, train_dict, k_ls=[1, 5, 10, 20, 50])
+            HR_all.append(HR_sum)
+            NDCG_all.append(NDCG_sum)
+            test_num += len(y)
+        HRs = [round(hr, 4) for hr in (np.array(HR_all).sum(axis=0) / test_num)]
+        NDCGs = [round(ndcg, 4) for ndcg in (np.array(NDCG_all).sum(axis=0) / test_num)]
 
-    return HR, NDCG
+    return HRs, NDCGs
 
 
 def save_model(model, optimizer, HR, hp, epochs):

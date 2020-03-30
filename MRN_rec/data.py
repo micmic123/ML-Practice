@@ -31,37 +31,37 @@ class SampleGenerator:
         self.X_behavior = data['X_behavior']
         self.item_dict = item_dict
         self.sample_pos = torch.LongTensor(data['y'])
-        self.num_user = meta['num_user']
-        self.num_item = meta['num_item'] + 1  # 0 is for padding
+        self.user_num = meta['user_num']
+        self.item_num = meta['item_num']  # 0 is for padding
         self.is_test = is_test
 
-    def get_loader(self, num_neg=4, batch_size=1024):
+    def get_loader(self, num_neg=4, batch_size=512):
         """ Loader for an epoch wih negative sampled data
         The loader returns user, item, behavior, sample, mask_len
         """
 
-        num_item = self.num_item
+        num_item = self.item_num
         sample_neg = []
 
         if self.is_test:
             dataset = EcomDataset(self.X_user, self.X_item, self.X_behavior, self.sample_pos)
-            loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=custom_collate)
+            loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=custom_collate, num_workers=6)
 
             return loader
 
         for user in self.X_user:
-            exceptions = self.item_dict[user]
+            exceptions = self.item_dict[user.item()]
             tmp = []
             for i in range(num_neg):
-                sample = int(num_item * random.random())
+                sample = int(num_item * random.random()) + 1
                 while sample in exceptions:
-                    sample = int(num_item * random.random())
+                    sample = int(num_item * random.random()) + 1
                 tmp.append(sample)
             sample_neg.append(tmp)
         sample_neg = torch.LongTensor(sample_neg).view(-1, num_neg)
         samples = torch.cat([self.sample_pos.view(-1, 1), sample_neg], dim=1)
         dataset = EcomDataset(self.X_user, self.X_item, self.X_behavior, samples)
-        loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=custom_collate)
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=custom_collate, num_workers=6)
 
         return loader
 
@@ -104,7 +104,8 @@ def read_data():
 
         'meta': {
             'item_num': 83587,  # id is 1~83587. 0 is left for padding.
-            'user_num': 28662
+            'user_num': 28662,
+            'behavior_num': 3
         },
 
         'train_item': train_item,
@@ -121,9 +122,9 @@ def custom_collate(batch):
     mask_len = None
     ls = []
     for i, samples in enumerate(transposed):
-        # user, sample
-        if i == 0 or i == 3:
-            ls.append(samples)
+        # user
+        if i == 0:
+            ls.append(torch.LongTensor(samples))
         # item
         elif i == 1:
             samples = [torch.LongTensor(seq) for seq in samples]
@@ -136,6 +137,9 @@ def custom_collate(batch):
             samples = [torch.LongTensor(seq) for seq in samples]
             samples_pad = pad_sequence(samples, batch_first=True)
             ls.append(samples_pad)
+        # sample
+        elif i == 3:
+            ls.append(torch.stack(samples))
     ls.append(mask_len)
 
     return ls

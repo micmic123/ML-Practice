@@ -117,7 +117,7 @@ class MRN4GRU(nn.Module):
             types = type
             batch_size = input.size(1)
 
-        c, reg = self.mrn.init_c_reg(batch_size, self.device)
+        c, reg = self.mrn.init_c_reg(batch_size, self._device)
         for x, behavior, m in zip(seqs, types, mask_len):
             if not m:
                 break

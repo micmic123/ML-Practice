@@ -26,7 +26,7 @@ class BaseTuner:
 
 class MRNRecTuner(BaseTuner):
     def get_candidates(self):
-        attrs = ['lr', 'embed_size', 'hidden_size', 'mrn_in_size', 'fcl_size', 'neg_num', 'batch_size']
+        attrs = ['lr', 'embed_size', 'hidden_size', 'mrn_in_size', 'fcl_size', 'num_neg', 'batch_size']
         candidates = (self.config[k] for k in attrs)
 
         return candidates
