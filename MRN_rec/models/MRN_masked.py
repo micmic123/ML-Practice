@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class MRN4GRUCell(nn.Module):
@@ -59,7 +60,7 @@ class MRN4GRUCell(nn.Module):
         N = [[i] for i in range(batch_size)]
         I = np.concatenate((np.expand_dims(type, axis=1), type_others), axis=1)
         # print('N, I')
-        reg = hidden_all[N, I]  # (batch_size, type_num, hidden_size)
+        reg = F.dropout(hidden_all[N, I])  # (batch_size, type_num, hidden_size)
         # print('reg')
         core = self.core_v2(c, reg)
         # print('core')

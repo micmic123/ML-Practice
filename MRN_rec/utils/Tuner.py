@@ -10,6 +10,7 @@ class BaseTuner:
         self.behavior_num = meta['behavior_num']
         self.device = config['device']
         self.epochs = config['epochs']
+        self.reg_strength = config['reg']
 
     def get_hp(self):
         for hps in itertools.product(*self.candidates):
@@ -26,13 +27,13 @@ class BaseTuner:
 
 class MRNRecTuner(BaseTuner):
     def get_candidates(self):
-        attrs = ['lr', 'embed_size', 'hidden_size', 'mrn_in_size', 'fcl_size', 'num_neg', 'batch_size']
+        attrs = ['lr', 'embed_size', 'hidden_size', 'mrn_in_size', 'fcl_size', 'num_neg', 'batch_size', 'reg']
         candidates = (self.config[k] for k in attrs)
 
         return candidates
 
     def get_combination(self, hps):
-        lr, embed_size, hidden_size, mrn_in_size, fcl_size, num_neg, batch_size = hps
+        lr, embed_size, hidden_size, mrn_in_size, fcl_size, num_neg, batch_size, reg = hps
         hp = {
             'model': {
                 'user_num': self.user_num,
@@ -50,38 +51,36 @@ class MRNRecTuner(BaseTuner):
                 'lr': lr,
                 'num_neg': num_neg,
                 'batch_size': batch_size,
+                'reg': reg
             }
         }
 
         return hp
 
 
-class MLPTuner(BaseTuner):
+class LSTMTuner(BaseTuner):
     def get_candidates(self):
-        config = self.config
-        candidates = (config['lr'], config['embed_dim'], config['layer_num'], config['neg_num'], config['batch_size'])
+        attrs = ['lr', 'embed_size', 'hidden_size', 'num_neg', 'batch_size', 'reg']
+        candidates = (self.config[k] for k in attrs)
 
         return candidates
 
     def get_combination(self, hps):
-        lr, embed_dim, layer_num, num_neg, batch_size = hps
+        lr, embed_size, hidden_size, num_neg, batch_size, reg = hps
         hp = {
             'model': {
                 'user_num': self.user_num,
                 'item_num': self.item_num,
-                'embed_dim': embed_dim,
-                'layer_num': layer_num
+                'embed_size': embed_size,
+                'hidden_size': hidden_size
             },
             'etc': {
+                'epochs': self.epochs,
                 'lr': lr,
                 'num_neg': num_neg,
                 'batch_size': batch_size,
-                'epochs': self.epochs
+                'reg': reg
             }
         }
 
         return hp
-
-
-class NeuMFTuner(BaseTuner):
-    pass

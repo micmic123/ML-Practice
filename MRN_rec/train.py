@@ -1,15 +1,15 @@
-import itertools, argparse, os, json
+import argparse, os
 from time import time
 from tqdm import tqdm
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from data import SampleGenerator, read_data
-from models.MRNRec import MRN4Rec
+from models.VanillaLSTM import VanillaLSTM
+from models.MRNRec_v2 import MRN4Rec
 from utils.metrics import eval
-from utils.Tuner import MRNRecTuner
+from utils.Tuner import MRNRecTuner, LSTMTuner
 
 
 parser = argparse.ArgumentParser(description='e.g. nohup python -u train.py --options > [log_name].log &')
@@ -29,12 +29,6 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f'[INFO] {DEVICE} activated')
 
 # data path
-base_path = os.path.expanduser('~/dataset/ml-1m/leave-one-out')
-# train_tuning_path = os.path.join(base_path, 'train_tuning.csv')
-train_real_path = os.path.join(base_path, 'train_real.csv')
-train_real_dict_path = os.path.join(base_path, 'train_real_dict.json')
-# validset_path = os.path.join(base_path, 'validset.csv')
-testset_path = os.path.join(base_path, 'testset.csv')
 model_path = './snapshot'
 
 # data of ndarray
@@ -46,9 +40,8 @@ testset = data['test']
 train_item = data['train_item']
 
 # batch generator
-train_generator = SampleGenerator(trainset, meta, train_item)
-test_loader = SampleGenerator(testset, meta, train_item, is_test=True).get_loader()
-print(f'[INFO] data loading finished')
+train_generator = None
+test_loader = None
 
 # tqdm on/off
 is_tqdm = True if args.tqdm.lower() == 'on' or args.tqdm.lower() == 'true' else False
@@ -57,40 +50,57 @@ is_tqdm = True if args.tqdm.lower() == 'on' or args.tqdm.lower() == 'true' else 
 def entry():
     mode = args.mode.lower()
     model = args.model.lower()
+    global train_generator
+    global test_loader
 
     # tuning model with train_real and save snapshot of the best model
     if mode == 'train':
         if model == 'mrn':
             config = {
-                'lr': [1e-3],  # 1e-3,
+                # 'lr': [1e-4],  # 1e-3,
+                # 'embed_size': [32, 64],  # 32
+                # 'hidden_size': [16, 32, 64],
+                # 'mrn_in_size': [64],
+                # 'fcl_size': [64],
+                # 'num_neg': [4],
+                # 'batch_size': [1024],
+                # 'epochs': 80,
+                # 'device': DEVICE
+                'lr': [5e-5],  # 5e-5, 3e-6 was good
                 'embed_size': [32],  # 32
-                'hidden_size': [64],
-                'mrn_in_size': [64],
-                'fcl_size': [64],
-                'num_neg': [4],
+                'hidden_size': [48],
+                'mrn_in_size': [48],
+                'fcl_size': [32],
+                'num_neg': [16],
+                'reg': [0],
                 'batch_size': [1024],
-                'epochs': 80,
+                'epochs': 100,
                 'device': DEVICE
             }
             tuner = MRNRecTuner(config, meta)
             MODEL = MRN4Rec
-        elif model == 'mlp':
+        elif model == 'lstm':
             config = {
-                'lr': [1e-3],  # 1e-3,
-                'embed_dim': [16, 32, 64],  # 64
-                'layer_num': [3],
-                'num_neg': [4],
-                'batch_size': [512],
-                'epochs': 80
+                'lr': [1e-4],
+                'embed_size': [64],
+                'hidden_size': [100],
+                'num_neg': [16],
+                'reg': [0],
+                'batch_size': [1024],
+                'epochs': 80,
+                'device': DEVICE
             }
-            # tuner = MLPTuner(config, meta)
-            # MODEL = MLP
+            tuner = LSTMTuner(config, meta)
+            MODEL = VanillaLSTM
         elif model == 'neumf':
             config = {
 
             }
             # tuner = NeuMFTuner(config, meta)
             # MODEL = NeuMF
+        train_generator = SampleGenerator(trainset, meta, train_item, model=model)
+        test_loader = SampleGenerator(testset, meta, train_item, is_test=True, model=model).get_loader()
+        print(f'[INFO] data loading finished')
         tuning(tuner, MODEL)
 
     # load the best model and run test with testset
@@ -116,7 +126,7 @@ def tuning(tuner, MODEL):
         print(f'[INFO] hyperparameters:\n{hp}')
         model = MODEL(hp['model'])
         model.to(DEVICE)
-        optimizer = optim.Adam(model.parameters(), lr=hp['etc']['lr'])
+        optimizer = optim.Adam(model.parameters(), lr=hp['etc']['lr'], weight_decay=hp['etc']['reg'])
         loader_option = (hp['etc']['num_neg'], hp['etc']['batch_size'])
         hr, loss = train(model, optimizer, loader_option, hp, epochs=hp['etc']['epochs'])
 
@@ -130,11 +140,12 @@ def tuning(tuner, MODEL):
 
 def train_epoch(model, optimizer, loader, epoch, num_neg):
     """ train for one epoch and return average loss """
+    model.train()
     loss_ls = []
     loader = tqdm(loader, desc=f'epoch {epoch}') if is_tqdm else loader
     # cnt = 0
     for user, item, behavior, sample, mask_len in loader:
-        user, item, sample, mask_len = user.to(DEVICE), item.to(DEVICE), sample.to(DEVICE), mask_len.to(DEVICE)
+        user, item, sample = user.to(DEVICE), item.to(DEVICE), sample.to(DEVICE)
 
         # sample, label, scores: (B, 1 + neg_num)
         scores = model(user, item, behavior, mask_len)
@@ -164,7 +175,6 @@ def train(model, optimizer, loader_option, hp, epochs=10, verbose=True):
     best_HR = -1
     best_loss = float('inf')  # loss for one epoch with training set
     best_epoch = -1
-    model.train()
 
     for epoch in range(epochs):
         start = time()
@@ -181,7 +191,7 @@ def train(model, optimizer, loader_option, hp, epochs=10, verbose=True):
         if verbose:
             t = end - start
             print(f'[Epoch {epoch:>2}, {t:.1f}s] loss: {loss:.4f} | k: [1, 5, 10, 20, 50]')
-            print(f'[HR@k: {HRs:} | NDCG@k: {NDCGs}]')
+            print(f'HR@k: {HRs:} | NDCG@k: {NDCGs}')
 
     if verbose:
         print(f'[INFO] the best HR@20 was {best_HR} with loss {best_loss} at {best_epoch}-th epoch')
@@ -199,7 +209,7 @@ def evaluate(model, loader, train_dict):
     with torch.no_grad():
         for user, item, behavior, y, mask_len in loader:
             y = y.view(-1).tolist()
-            user, item, mask_len = user.to(DEVICE), item.to(DEVICE), mask_len.to(DEVICE)
+            user, item, mask_len = user.to(DEVICE), item.to(DEVICE), mask_len
             scores = model(user, item, behavior, mask_len)
             HR_sum, NDCG_sum = eval(user.tolist(), scores, y, train_dict, k_ls=[1, 5, 10, 20, 50])
             HR_all.append(HR_sum)
