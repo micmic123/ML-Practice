@@ -49,7 +49,7 @@ class MRN4GRUCell(nn.Module):
         # print('type_others')
         # (batch_size, type_num, hidden_size)
         # print(reg)
-        hidden_tmp = torch.stack([rnn(input, c) for i, rnn in enumerate(self.rnns)], dim=1)  # reg[:, i, :]
+        hidden_tmp = torch.stack([rnn(input, reg[:, i, :]) for i, rnn in enumerate(self.rnns)], dim=1)  # reg[:, i, :]
         # print('a')
         hidden = hidden_tmp[range(batch_size), type].unsqueeze(dim=1)  # (batch_size, 1, hidden_size)
         # print('hidden')
@@ -84,7 +84,7 @@ class MRN4GRUCell(nn.Module):
         """
         reg = reg.view(reg.size(0), -1)  # (batch_size, type_num * hidden_size)
         x = torch.cat([reg, c], dim=1)  # (batch_size, (type_num+1) * hidden_size)
-        x = F.dropout(self.activation(self.core_linear1(x)))  # (batch_size, 2 * hidden_size)
+        x = self.activation(self.core_linear1(x))  # (batch_size, 2 * hidden_size)
         core = self.activation(self.core_linear2(x))  # (batch_size, hidden_size)
 
         return core

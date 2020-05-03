@@ -36,7 +36,7 @@ class SampleGenerator:
         self.is_test = is_test
         self.model = model
 
-    def get_loader(self, num_neg=4, batch_size=2048):
+    def get_loader(self, num_neg=4, batch_size=1048):
         """ Loader for an epoch wih negative sampled data
         The loader returns user, item, behavior, sample, mask_len
         """
@@ -45,7 +45,7 @@ class SampleGenerator:
         sample_neg = []
         if self.model == 'mrn':
             collate_fn = custom_collate_mrn
-        elif self.model =='lstm':
+        elif self.model == 'lstm' or self.model == 'gru':
             collate_fn = custom_collate_lstm
 
         if self.is_test:

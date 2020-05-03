@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import torch
 import torch.nn as nn
@@ -20,14 +21,14 @@ class MRN4GRUCell(nn.Module):
         self.rnns = nn.ModuleList()
         for i in range(self.type_num):
             self.rnns.append(nn.GRUCell(self.input_size, self.hidden_size))
-        # self.core_gru = nn.GRUCell(self.type_num * self.hidden_size, self.hidden_size)
-        self.core_linear1 = nn.Linear((self.type_num+1) * self.hidden_size, 2 * self.hidden_size)
-        self.core_linear2 = nn.Linear(2 * self.hidden_size, self.hidden_size)
+        self.core_linear1 = nn.Linear(2 * self.hidden_size, 3 * self.hidden_size)
+        self.core_linear2 = nn.Linear(3 * self.hidden_size, self.hidden_size)
         self.activation = nn.ReLU()
 
-    def forward(self, input, type, c=None, reg=None):
+    def forward(self, query, input, type, c=None, reg=None):
         """
         :param
+        - query: (batch_size, hidden_size), query for attention of registers
         - input: (batch_size, input_size)
         - type: (batch_size, ), 0, 1, ..., type_num-1
         - c: (batch_size, hidden_size), core state
@@ -60,34 +61,69 @@ class MRN4GRUCell(nn.Module):
         N = [[i] for i in range(batch_size)]
         I = np.concatenate((np.expand_dims(type, axis=1), type_others), axis=1)
         # print('N, I')
-        reg = F.dropout(hidden_all[N, I])  # (batch_size, type_num, hidden_size)
+        reg = hidden_all[N, I]  # (batch_size, type_num, hidden_size)
         # print('reg')
-        core = self.core(reg, c)
+        core = self.core(query, reg, c)
         # print('core')
 
         return core, reg
 
-    def core_v2(self, c=None, reg=None):
-        x = reg
-        x = x.view(x.size(0), -1)  # (batch_size, type_num * hidden_size)
-        core = self.core_gru(x, c)
-
-        return core
-
-    def core(self, reg, c):
+    # dot
+    def core(self, query, reg, c):
         """
         :param
-        - reg: (batch_size, type_num, hidden_size)
+        - query: (batch_size, hidden_size), query for attention
+        - reg: (batch_size, type_num, hidden_size), keys for attention
         - c : (batch_size, hidden_size)
         :return
-        - core: (batch_size, hidden_size)
+        - context: (batch_size, hidden_size)
         """
-        reg = reg.view(reg.size(0), -1)  # (batch_size, type_num * hidden_size)
-        x = torch.cat([reg, c], dim=1)  # (batch_size, (type_num+1) * hidden_size)
-        x = F.dropout(self.activation(self.core_linear1(x)))  # (batch_size, 2 * hidden_size)
-        core = self.activation(self.core_linear2(x))  # (batch_size, hidden_size)
+        query = query.unsqueeze(2)  # (batch_size, hidden_size, 1)
+        scores = torch.bmm(reg, query) / self.hidden_size  # (batch_size, type_num, 1),
+        weights = F.softmax(scores, dim=1)  # (batch_size, type_num, 1)
+        context = torch.sum(weights * reg, dim=1)  # (batch_size, hidden_size)
+
+        return context
+
+    # scaled dot
+    def core_v2(self, query, reg, c):
+        query = query.unsqueeze(2)  # (batch_size, hidden_size, 1)
+        scores = torch.bmm(reg, query) / math.sqrt(self.hidden_size)  # (batch_size, type_num, 1), scaled dot
+        weights = F.softmax(scores, dim=1)  # (batch_size, type_num, 1)
+        context = torch.sum(weights * reg, dim=1)  # (batch_size, hidden_size)
+
+        return context
+
+    # with core
+    def core_v3(self, query, reg, c):
+        query = query.unsqueeze(2)  # (batch_size, hidden_size, 1)
+        c = c.unsqueeze(1)  # (batch_size, 1, hidden_size)
+        reg = torch.cat([reg, c], dim=1)  # (batch_size, type_num + 1, hidden_size)
+        scores = torch.bmm(reg, query) / math.sqrt(self.hidden_size)  # (batch_size, type_num + 1, 1)
+        weights = F.softmax(scores, dim=1)  # (batch_size, type_num + 1, 1)
+        context = torch.sum(weights * reg, dim=1)  # (batch_size, hidden_size)
+
+        return context
+
+    def core_v4(self, query, reg, c):
+        query = query.unsqueeze(2)  # (batch_size, hidden_size, 1)
+        scores = torch.bmm(reg, query) / math.sqrt(self.hidden_size)  # (batch_size, type_num, 1), scaled dot
+        weights = F.softmax(scores, dim=1)  # (batch_size, type_num, 1)
+        context_user = torch.sum(weights * reg, dim=1)  # (batch_size, hidden_size)
+
+        c = c.unsqueeze(2)  # (batch_size, hidden_size, 1)
+        scores = torch.bmm(reg, c) / math.sqrt(self.hidden_size)  # (batch_size, type_num, 1), scaled dot
+        weights = F.softmax(scores, dim=1)  # (batch_size, type_num, 1)
+        context_c = torch.sum(weights * reg, dim=1)  # (batch_size, hidden_size)
+
+        context = torch.cat([context_user, context_c], dim=1)  # (batch_size, 2 * hidden_size)
+        x = self.activation(self.core_linear1(context))  # (batch_size, 3 * hidden_size)
+        core = self.core_linear2(x)  # (batch_size, hidden_size)
 
         return core
+
+    def core_v5(self, query, reg, c):
+        pass
 
     def init_c_reg(self, batch_size, device):
         c = torch.zeros(batch_size, self.hidden_size).to(device)
@@ -107,9 +143,10 @@ class MRN4GRU(nn.Module):
 
         self.mrn = MRN4GRUCell(input_size, hidden_size, type_num)
 
-    def forward(self, input, type, mask_len, core=None):
+    def forward(self, user, input, type, mask_len, core=None):
         """
         :param
+        - user: (batch_size, hidden_size)
         - input: (batch_size, time, input_size)
         - type: (batch_size, time)
         - mask_len: (time, )
@@ -131,7 +168,7 @@ class MRN4GRU(nn.Module):
             if not m:
                 break
 
-            core, reg = self.mrn(x[:m], behavior[:m], c[:m], reg[:m])
+            core, reg = self.mrn(user[:m], x[:m], behavior[:m], c[:m], reg[:m])
             c = torch.cat([core, c[m:]])
 
         return c

@@ -6,8 +6,8 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from data import SampleGenerator, read_data
-from models.VanillaLSTM import VanillaLSTM
-from models.MRNRec_v2 import MRN4Rec
+from models.VanillaLSTM import VanillaLSTM, VanillaLSTM_v0, VanillaGRU_v0
+from models.MRNRec_v3 import MRN4Rec
 from utils.metrics import eval
 from utils.Tuner import MRNRecTuner, LSTMTuner
 
@@ -66,32 +66,45 @@ def entry():
                 # 'batch_size': [1024],
                 # 'epochs': 80,
                 # 'device': DEVICE
-                'lr': [5e-5],  # 5e-5, 3e-6 was good
-                'embed_size': [32],  # 32
-                'hidden_size': [48],
-                'mrn_in_size': [48],
-                'fcl_size': [32],
-                'num_neg': [16],
+                'lr': [1e-4],  # 5e-5, 3e-6 was good
+                'embed_size': [100],  # 32
+                'hidden_size': [512],
+                'mrn_in_size': [100],
+                'fcl_size': [256],
+                'num_neg': [16, 32],
                 'reg': [0],
-                'batch_size': [1024],
-                'epochs': 100,
+                'batch_size': [512],
+                'epochs': 80,
                 'device': DEVICE
             }
             tuner = MRNRecTuner(config, meta)
             MODEL = MRN4Rec
         elif model == 'lstm':
             config = {
-                'lr': [1e-4],
-                'embed_size': [64],
-                'hidden_size': [100],
-                'num_neg': [16],
+                'lr': [3e-4],
+                'embed_size': [100],
+                'hidden_size': [512],
+                'num_neg': [32],
                 'reg': [0],
-                'batch_size': [1024],
+                'batch_size': [512],
+                'epochs': 100,
+                'device': DEVICE
+            }
+            tuner = LSTMTuner(config, meta)
+            MODEL = VanillaLSTM_v0
+        elif model == 'gru':
+            config = {
+                'lr': [3e-4],
+                'embed_size': [100],
+                'hidden_size': [512],
+                'num_neg': [32],
+                'reg': [0],
+                'batch_size': [512],
                 'epochs': 80,
                 'device': DEVICE
             }
             tuner = LSTMTuner(config, meta)
-            MODEL = VanillaLSTM
+            MODEL = VanillaGRU_v0
         elif model == 'neumf':
             config = {
 

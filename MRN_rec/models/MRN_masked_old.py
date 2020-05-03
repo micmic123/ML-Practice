@@ -20,7 +20,7 @@ class MRN4GRUCell(nn.Module):
         self.rnns = nn.ModuleList()
         for i in range(self.type_num):
             self.rnns.append(nn.GRUCell(self.input_size, self.hidden_size))
-        # self.core_gru = nn.GRUCell(self.type_num * self.hidden_size, self.hidden_size)
+        self.core_gru = nn.GRUCell(self.type_num * self.hidden_size, self.hidden_size)
         self.core_linear1 = nn.Linear((self.type_num+1) * self.hidden_size, 2 * self.hidden_size)
         self.core_linear2 = nn.Linear(2 * self.hidden_size, self.hidden_size)
         self.activation = nn.ReLU()
@@ -49,7 +49,7 @@ class MRN4GRUCell(nn.Module):
         # print('type_others')
         # (batch_size, type_num, hidden_size)
         # print(reg)
-        hidden_tmp = torch.stack([rnn(input, c) for i, rnn in enumerate(self.rnns)], dim=1)  # reg[:, i, :]
+        hidden_tmp = torch.stack([rnn(input, reg[:, i, :]) for i, rnn in enumerate(self.rnns)], dim=1)
         # print('a')
         hidden = hidden_tmp[range(batch_size), type].unsqueeze(dim=1)  # (batch_size, 1, hidden_size)
         # print('hidden')
@@ -62,29 +62,21 @@ class MRN4GRUCell(nn.Module):
         # print('N, I')
         reg = F.dropout(hidden_all[N, I])  # (batch_size, type_num, hidden_size)
         # print('reg')
-        core = self.core(reg, c)
+        core = self.core_v2(c, reg)
         # print('core')
 
         return core, reg
 
     def core_v2(self, c=None, reg=None):
         x = reg
-        x = x.view(x.size(0), -1)  # (batch_size, type_num * hidden_size)
+        x = x.view(x.size(0), x.size(1) * x.size(2))  # (batch_size, type_num * hidden_size)
         core = self.core_gru(x, c)
 
         return core
 
-    def core(self, reg, c):
-        """
-        :param
-        - reg: (batch_size, type_num, hidden_size)
-        - c : (batch_size, hidden_size)
-        :return
-        - core: (batch_size, hidden_size)
-        """
-        reg = reg.view(reg.size(0), -1)  # (batch_size, type_num * hidden_size)
-        x = torch.cat([reg, c], dim=1)  # (batch_size, (type_num+1) * hidden_size)
-        x = F.dropout(self.activation(self.core_linear1(x)))  # (batch_size, 2 * hidden_size)
+    def core(self, registers, c):
+        x = torch.cat(registers.append(c), dim=1)  # (batch_size, (type_num+1) * hidden_size)
+        x = self.activation(self.core_linear1(x))  # (batch_size, 2 * hidden_size)
         core = self.activation(self.core_linear2(x))  # (batch_size, hidden_size)
 
         return core
